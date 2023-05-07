@@ -497,21 +497,26 @@ make_umap = function(df_data, K=10, seed=142, scale=F, path_plot = here::here('p
     bind_cols(df_info) %>%
     mutate(outliers_x1 = !between(percent_rank(X1),0.01,0.99),
            outliers_x2 = !between(percent_rank(X2),0.01,0.99)) %>%
-    mutate(pt_lab=paste0(PROTEIN," ",START,"-",END))
+    mutate(pt_lab=paste0(PROTEIN," ",START,"-",END)) |>
+    filter(between(X1,-10,10), between(X2,-10,10)) 
   
   x1.q = quantile(df_umap$X1,seq(0,1,len=101))
   x2.q = quantile(df_umap$X2,seq(0,1,len=101))
   print(summary(df_umap[,c('X1','X2')]))
   
-  #df_umap %>% filter(outliers_x1 | outliers_x2)
+  n_idr= n_distinct(df_info$IDR_id)
+  n_idr_umap= n_distinct(df_umap$IDR_id)
   
-  n_idr= n_distinct(df_umap$IDR_id)
+  n_prot= n_distinct(df_info$AC)
+  n_prot_umap= n_distinct(df_umap$AC)
+  sample_size_text = sprintf("IDR=%s (%s) | PROT=%s (%s) ",n_idr_umap,n_idr,n_prot_umap,n_prot)
+  
   umap_atar = subset(df_umap,from_atar)
   # Plot the umap
   UMAP = ggplot(data=df_umap ,aes(x = X1,y = X2)) +
     # all idrs
     geom_point(size=1.5,shape=16,color='gray',alpha=1) +
-    geom_text(data=NULL,label=sprintf("N=%s",n_idr), x=Inf, y=Inf, hjust='right',vjust='top',check_overlap = T) +
+    geom_text(data=NULL,label=sample_size_text, x=Inf, y=Inf, hjust='right',vjust='top',check_overlap = T) +
     # highlight atar idr
     geom_point(data=umap_atar, aes(color=PROTEIN), shape=16, size=4,alpha=0.9) +
     # annotate atar idr 
