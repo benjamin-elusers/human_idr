@@ -47,7 +47,7 @@ count_aa = function(string,verbose=F){
  aminoacids = c(Biostrings::AA_STANDARD,"X")
 
   m_aacount = Biostrings::AAStringSet(x=string) |>
-              letterFrequency(letters = aminoacids)
+              letterFrequency(letters = aminoacids) 
   toc()
   return(m_aacount)
 }
@@ -60,8 +60,10 @@ calculate_aascore = function(aa,verbose=F,scores=get_aa_scales(AA=3)){
   aas = intersect(rownames(scores),colnames(aa))
   sum_scores = map(scores[aas,],
               ~magrittr::multiply_by(aa,.x) |>  rowSums()) |> bind_rows()
+  
   toc()
-  df_scores = bind_cols(sum_aa=rowSums(aa[,aas]),sum_scores)
+  df_scores = bind_cols(sum_aa=rowSums(aa[,aas]),sum_scores) |>
+              mutate( across(all_of(names(scores)), ~ .x / sum_aa, .names = 'mean_{col}') )
   return(df_scores)
 }
 
@@ -107,17 +109,23 @@ load_phasepro_human = function(all_col=F){
     bind_rows() |>
     separate_rows(boundaries, sep="; ",convert = T) |>
     mutate( boundaries = str_extract_all(boundaries,"[0-9]+\\-[0-9]+")) |>
-    separate(boundaries, into=c('start','end')) |>
+    separate(boundaries, into=c('PS_START','PS_END')) |>
     type_convert() |>
-    mutate(protein_len = nchar(sequence),
-           feature_seq = str_sub(sequence,start,end),
+    mutate(ncbi_taxid=9606,evidence="curated",feature='phase_separation',source="phasepro",
+           protein_len = nchar(sequence),
+           feature_seq = str_sub(sequence,PS_START,PS_END),
            feature_len = nchar(feature_seq)) |>
     relocate(organism,accession,gene,name,common_name,
-             start,end,segment,forms,organelles,
+             PS_START,PS_END,segment,forms,organelles,
              domain_dep,ptm_dep,rna_dep,partner_dep,in_vivo,in_vitro) |>
     dplyr::rename(protein_seq = sequence) |>
     dplyr::select(-any_of(c(col_id,col_ref,col_ctrl,col_desc,col_exp,'boundaries'))) |>
-    filter(organism == "Homo sapiens")
+    filter(organism == "Homo sapiens") |> 
+    group_by(accession) |>
+    mutate(content_count=sum(feature_len),
+           content_fraction=content_count/protein_len,
+           PS_id = paste0(accession,"_",PS_START,"..",PS_END),
+           region=sprintf("%s-%s",PS_START,PS_END))
   return(phasepro)
 }
 
@@ -161,6 +169,11 @@ merge_ps_region = function(df_ps_region,maxgap=1){
     add_count(acc,name='PS_n') |>
     mutate(PS_full = LEN == PS_len, PS_n = PS_n - ((PS_n>1)*PS_full)) |>
     dplyr::select(-PS_db) |> distinct()
+  
+  n_ps = n_distinct(ps_merged$PS_id)
+  n_psprot = n_distinct(ps_merged$acc)
+  .info$log(sprintf("Phase-separating MERGED regions: %s (in %s proteins)",n_ps,n_psprot))
+  
   return(ps_merged)
 }
 
@@ -172,11 +185,12 @@ which_overlap = function(s1,e1,s2,e2){
     s1 > s2 & e1 < e2 ~ "inside",
     s1 == s2 & e1 == e2 ~ "superposed",
     is.na(s2) | is.na(e2) ~ NA,
+    .default = 'none'
   )
 }
 
 has_overlap = function(s1,e1,s2,e2){
-  any(which_overlap(s1,e1,s2,e2))
+  which_overlap(s1,e1,s2,e2) != "none"
 }
 
 # Loading needed packages ------------------------------------------------------
@@ -241,39 +255,52 @@ get_human_mobidb = function(){
              distinct()
 }
 
-### phasepro -------------------------------------------------------------------
+get_human_phase_separation = function(mobidb=get_human_mobidb()){
+  cat("loading data from mobidb on human phase-separating regions (annotated in phaseproDB)\n")
+  ### phasepro -------------------------------------------------------------------
+  
+  # From mobidb with feature phase_separation and source phasepro
+  phasepro_db  = load_phasepro_human() |>
+    mutate(is_uniref = (accession %in% hs_uniref)) |>
+    dplyr::select(ncbi_taxid,acc=accession,evidence,feature,source,
+                  PS_id,PS_START,PS_END,content_fraction, content_count, 
+                  feature_len, is_uniref, 
+                  uniprot_seq = protein_seq, uniprot_len = protein_len) 
+  
+  phasepro_mobidb = mobidb |> 
+    dplyr::select(-length) |>
+    filter(feature == 'phase_separation' & source=='phasepro') |>
+    dplyr::rename(PS_id = feature_id, PS_START=START, PS_END=END)
+  
+  # Turn phasepro as molecular features (columns)
+  phasepro_wide = full_join(phasepro_mobidb,phasepro_db) |>
+    mutate( region =  paste0(PS_START,"-",PS_END))|>
+    dplyr::select(acc,PS_db=source,PS_id,PS_START,PS_END,region) |> 
+    distinct() 
+  ### phasepdb -------------------------------------------------------------------
 
-
-cat("loading data from mobidb on human phase-separating regions (annotated in phaseproDB)\n")
-# From mobidb with feature phase_separation and source phasepro
-phasepro  = load_phasepro_human()
-phasepro_mobidb = hs_mobidb |>
-  filter(feature == 'phase_separation' & source=='phasepro') |>
-  dplyr::rename(PS_id = feature_id)
-
-# Turn phasepro as molecular features (columns)
-phasepro_wide = phasepro |>
-  pivot_wider(id_cols=c('acc','PS_id'),
-              names_from='source',
-              values_from = c('START','END'), values_fn=unique) |>
-  dplyr::rename(PS_START=START_phasepro,PS_END=END_phasepro) |>
-  mutate(PS_db='phasepro', region=sprintf("%s-%s",PS_START,PS_END))
-
-### phasepdb -------------------------------------------------------------------
-
-# Turn phasepdb as molecular features (columns)
-phasep_wide = load_phasepdb_human() |>
-  dplyr::select(acc=uniprot_entry,PS_db,PS_id,PS_START,PS_END,region)
-
-# Combine human phase-separation regions
-PS_raw = bind_rows(phasepro_wide,phasep_wide)
-
-# Get uniprot annotations for phase-separating proteins
-dataset_uniprot_phase = here::here('data','uniprot-human-phase_separating_proteins.rds')
-UNI_PS = preload(dataset_uniprot_phase,
-        get_uniprot_ids(PS_raw$acc) |> distinct(),
-        doing = 'loading uniprot annotations for PS proteins')
-
+  # Turn phasepdb as molecular features (columns)
+  phasep_wide = load_phasep_human() |>
+    dplyr::select(acc=uniprot_entry,PS_db,PS_id,PS_START,PS_END,region)
+  
+  # Combine human phase-separation regions
+  PS_raw = full_join(phasepro_wide,phasep_wide) |> distinct()
+  
+  # Get uniprot annotations for phase-separating proteins
+  dataset_uniprot_phase = here::here('data','uniprot-human-phase_separating_proteins.rds')
+  UNI_PS = preload(dataset_uniprot_phase,
+          get_uniprot_ids(PS_raw$acc) |> distinct(),
+          doing = 'loading uniprot annotations for PS proteins')
+  
+  hs_PS = full_join(PS_raw,UNI_PS, by=c('acc'='AC')) |>
+    arrange(acc,PS_id)
+  
+  n_ps = n_distinct(hs_PS$PS_id)
+  n_psprot = n_distinct(hs_PS$acc)
+  .info$log(sprintf("Phase-separating regions: %s (in %s proteins)",n_ps,n_psprot))
+  
+  return(hs_PS)
+}
 
 # Shorthands for building IDR dataset -------------------------------------------
 # They should be used in series to generate a complete dataset
@@ -314,6 +341,7 @@ get_aa_count =function(.data,col_sequence="feature_seq"){
   .info$log("Count amino-acids (single + chemical properties) in sequence...")
   tic("Count amino-acids (single + chemical properties) in sequence...")
   aa_properties = get.aa.poperties()
+
   df_aacount = count_aa(.data[[col_sequence]]) |> as_tibble()
   df_aaprop = map(aa_properties, function(x){ dplyr::select(df_aacount,any_of(x)) |> rowSums() }) |> bind_cols()
   df_aaacount = df_aacount |> dplyr::rename(invert(get.AA3()))
@@ -332,7 +360,7 @@ get_aa_freq = function(aa_count,col_aa=c(get.AAA(),"X")){
 get_aa_scores =function(aa_count,col_aa_count=c(get.AAA())){
   .info$log("Compute amino-acids scores based on amino-acids counts...")
   tic("Compute amino-acids scores  based on amino-acids counts...")
-  df_aascore = calculate_aascore(aa_count |> dplyr::select(all_of(col_aa_count)))
+  df_aascore = calculate_aascore(aa_count |> dplyr::select(all_of(col_aa_count))) 
   toc()
   return( df_aascore )
 }
@@ -376,7 +404,7 @@ get_aa_topfc= function(aa_fc,col_aa=paste0("fc_",c(get.AAA(),"X")),topn=4){
             name.val = sprintf("%s:%2.1f:%2.1f",aa,fc,lfc)) |>
     slice_max(order_by = fc, n = topn, with_ties = F) |>
     group_by(id) %>%
-    reframe(fctop_aa = paste0(aa, collapse=":"),
+    reframe(fctop_aa = paste0(str_replace_all(aa,"fc_",""), collapse=":"),
             fctop_fc=paste0(fc, collapse=":"),
             fctop_lfc = paste0(lfc, collapse = ":")) |>
     distinct() |>
@@ -396,19 +424,21 @@ get_aa_charge = function(aa_count,col_pos=c("LYS","ARG","HIS"), col_neg= c("ASP"
   return( df_charged )
 }
 
-get_aa_foldchange = function(aa_count,col_aa=c(get.AAA(),"X")){
+get_aa_foldchange = function(aa_count,ref_aa_freq,col_aa=c(get.AAA(),"X")){
   .info$log("Count of fold-change of residues within disordered regions...")
   tic("Count of fold-change of residues within disordered regions...")
 
   aas = aa_count |> dplyr::select(all_of(col_aa))
-  naa = rowSums(aas)
-  tot_aa = sum(naa)
-
+  naa=  rowSums(aas)
   # calculate the frequencies of residues in disordered regions
   aas_freq = tibble(aas,tot=naa) |> rowwise() |> mutate(across(all_of(col_aa), ~.x/tot))
-  # calculate the frequencies of residues acrossdisordered proteome
-  prot_freq = aas |> colSums() |> magrittr::divide_by(tot_aa)
-  df_foldchange = sweep( aas_freq[,col_aa],2,prot_freq,"/")
+  if(missing(ref_aa_freq)){
+    # calculate the frequencies of residues across disordered proteome
+    tot_aa = sum(naa)
+    ref_aa_freq = aas |> colSums() |> magrittr::divide_by(tot_aa)
+  }
+
+  df_foldchange = sweep( aas_freq[,col_aa],2,ref_aa_freq,"/")
   toc()
   colnames(df_foldchange) = paste0("fc_",colnames(df_foldchange))
 
