@@ -445,3 +445,98 @@ get_aa_foldchange = function(aa_count,ref_aa_freq,col_aa=c(get.AAA(),"X")){
   return(df_foldchange)
 }
 
+make_features_correlation= function(df_data, path_plot = here::here('plots')){
+  
+  df_num = df_data %>%
+    dplyr::select(where(~ is.numeric(.x))) %>%
+    dplyr::select(-START,-END)
+  
+  cor_features = ggcorrplot::ggcorrplot(cor(df_num),
+                                        outline.color = 'transparent', 
+                                        tl.cex = 8, tl.srt = 70)
+  ggsave(cor_features,path=path_plot,
+         filename ='correlation-human-idr-features.png',
+         height=12,width=12,bg='white')
+  
+}
+
+make_umap = function(df_data, K=10, seed=142, scale=F, path_plot = here::here('plots')){
+  
+  library(umap)
+  library(ggalt)
+  library(ggiraph)
+  library(ggforce)
+  set.seed(seed)
+  umap.config = umap.defaults
+  umap.config$n_neighbors = K
+  
+  tag_neighbor = sprintf("-K%s",K)
+  
+  df_num = df_data %>%
+    dplyr::select(where(~ is.numeric(.x))) %>%
+    dplyr::select(-START,-END)
+  
+  df_info = df_data %>% dplyr::select( -colnames(df_num) )
+  # Compute umap based on scaled features
+  cat(sprintf("Compute umap with K=%s neighbors using ",K))
+  
+  if(scale){
+    cat(": scaled features...\n")
+    tag_scale = "-scaled"
+    features_map <- df_num %>% scale() %>% umap::umap(seed = seed, config=umap.config) 
+  }else{
+    cat(": raw features (unscaled)...\n")
+    tag_scale = "-raw"
+    features_map <- df_num %>% umap::umap(seed = seed, config=umap.config)
+  }
+  
+  # Mark outliers on umap coordinates (in 1/99% percentiles or outside the interval defined below for X1/X2)
+  df_umap = features_map$layout %>% magrittr::set_colnames(c('X1','X2')) %>%
+    bind_cols(features_map$data %>% as_tibble() %>% rename_with(.fn = xxS, sx=tag_scale,s='')) %>%
+    bind_cols(df_num) %>%
+    bind_cols(df_info) %>%
+    mutate(outliers_x1 = !between(percent_rank(X1),0.01,0.99),
+           outliers_x2 = !between(percent_rank(X2),0.01,0.99)) %>%
+    mutate(pt_lab=paste0(PROTEIN," ",START,"-",END))
+  
+  x1.q = quantile(df_umap$X1,seq(0,1,len=101))
+  x2.q = quantile(df_umap$X2,seq(0,1,len=101))
+  print(summary(df_umap[,c('X1','X2')]))
+  
+  #df_umap %>% filter(outliers_x1 | outliers_x2)
+  
+  n_idr= n_distinct(df_umap$IDR_id)
+  umap_atar = subset(df_umap,from_atar)
+  # Plot the umap
+  UMAP = ggplot(data=df_umap ,aes(x = X1,y = X2)) +
+    # all idrs
+    geom_point(size=1.5,shape=16,color='gray',alpha=1) +
+    geom_text(data=NULL,label=sprintf("N=%s",n_idr), x=Inf, y=Inf, hjust='right',vjust='top',check_overlap = T) +
+    # highlight atar idr
+    geom_point(data=umap_atar, aes(color=PROTEIN), shape=16, size=4,alpha=0.9) +
+    # annotate atar idr 
+    ggrepel::geom_text_repel(data=umap_atar,aes(label=pt_lab,color=PROTEIN), size=3, fontface='italic',
+                             max.overlaps=15, force=5, force_pull=0, seed=291222) +
+    # graphical parameters
+    labs(x = "UMAP1", y = "UMAP2", subtitle="")+
+    see::scale_color_metro(palette = 'rainbow', discrete = T) +
+    theme(legend.position="bottom") +
+    ggeasy::easy_text_size(c("axis.title","axis.text.x", "axis.text.y"), size = 20)+
+    ggeasy::easy_remove_legend() +
+    ggeasy::easy_remove_x_axis('ticks') + ggeasy::easy_remove_y_axis('ticks') +
+    theme(aspect.ratio = 1)
+  
+  # Make interactive points
+  plot(UMAP)
+  
+  # save umap in PNG/PDF
+  plot_name = sprintf('umap-idr-human%s%s',tag_neighbor,tag_scale)
+  ggsave(UMAP, path = path_plot,
+         filename = paste0(plot_name,'.png'),
+         device = 'png', height=12, width=12, bg='white')
+  ggsave(UMAP, path = path_plot, 
+         filename = paste0(plot_name,'.pdf'), 
+         device = 'pdf', height=12, width=12, bg='white')
+  return(UMAP)
+}
+

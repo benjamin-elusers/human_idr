@@ -8,14 +8,16 @@ library(hablar)
 # Filter consensus disordered regions (at least 50% agreement of predictors)
 hs_mobidb = get_human_mobidb()
 hs_diso =  dplyr::filter(hs_mobidb, is_uniref & feature == 'disorder' & source %in% 'th_50') |>
-           dplyr::rename(IDR_id=feature_id)
+           dplyr::rename(IDR_id=feature_id) |> 
+           arrange(IDR_id)
 
 cluster <- new_cluster(14)
 cluster_library(cluster, "dplyr")
-hs_idr = add_idr_sequence(hs_diso, cl=cluster)
-hs_peptides = get_peptstats(hs_idr,cl=cluster)
+hs_idr = add_idr_sequence(hs_diso, cl=cluster) |>  arrange(IDR_id)
+hs_peptides = get_peptstats(hs_idr,cl=cluster) |>  arrange(IDR_id)
 rm(cluster)
 
+hs_idr_info = hs_idr |> dplyr::select(acc,IDR_id,feature_len,feature_seq)
 # Compute amino acid counts in human IDRs
 hs_aacount = get_aa_count(hs_idr,'feature_seq')
 # Compute molecular features based on human IDR amino acid counts
@@ -71,11 +73,12 @@ ATAR_CANDIDATES = rio::import(here::here('data',"ATAR_candidates_table.xlsx"))
 df_atar = left_join(ATAR_CANDIDATES, df_hs_seq, by=c("UNIPROT"='uniprot_id')) |>
           dplyr::select(PROTEIN,UNIPROT,uniprot_seq,atar_sequence=SEQUENCE,
                         START="Start Position",END="End Position", LEN = SEQ_LENGTH) |>
-          mutate( IDR_id  = paste0(UNIPROT,"_",START,"..",END), atar_len = nchar(atar_sequence) )
+          mutate( IDR_id  = paste0(UNIPROT,"_",START,"..",END), atar_len = nchar(atar_sequence) ) |>
+          arrange(IDR_id)
 
 cluster <- new_cluster(10)
-atar_idr = add_idr_sequence(df_atar,cluster)
-atar_peptides = get_peptstats(atar_idr,cl=cluster)
+atar_idr = add_idr_sequence(df_atar,cluster) |> arrange(IDR_id)
+atar_peptides = get_peptstats(atar_idr,cl=cluster) |> arrange(IDR_id)
 rm(cluster)
 
 # Compute amino acid counts in candidate IDRs
@@ -114,7 +117,6 @@ ATAR_IDR = left_join(atar_idr,atar_features,by="IDR_id") |>
 #save.image(file = here::here('data', 'IDR-features-data.rdata'))
 
 
-# IDR UMAP #####################################################################
 # IDR FEATURES TO USE
 # AA Frequencies + by chemical group
 # AA Foldchanges
@@ -133,82 +135,21 @@ df_features = bind_rows(HS_IDR,ATAR_IDR) %>%
           dplyr::select(-IDR_len) %>%
           distinct() 
 
-### Select features for umap
-# all numeric
-df_features_num = df_features %>%
-              dplyr::select(where(~ is.numeric(.x))) %>%
-              dplyr::select(-START,-END)
-
+# IDR UMAP #####################################################################
 # Check correlogram of numeric features to remove redundancy
 # (high absoluter correlation == redundant features)
-cor_features = ggcorrplot::ggcorrplot(cor(df_features_num),outline.color = 'transparent', tl.cex = 8, tl.srt = 70)
-ggsave(cor_features,filename = here::here('plots','correlation-human-idr-features.png'),height=12,width=12,bg='white')
+make_features_correlation(df_features)
 
-# Get non-features columns (protein id, IDR boundaries...)
-df_info = df_features %>% dplyr::select( -colnames(df_features_num) )
+make_umap(df_features, K = 3, seed = 142, scale = T)
+make_umap(df_features, K = 5, seed = 142, scale = T)
+make_umap(df_features, K = 10, seed = 142, scale = T)
+make_umap(df_features, K = 15, seed = 142, scale = T)
+make_umap(df_features, K = 20, seed = 142, scale = T)
 
-K=20
-library(umap)
-set.seed(142)
-umap.config = umap.defaults
-umap.config$n_neighbors = K
-# Compute umap based on scaled features
-idr_features_map <- df_features_num %>% umap::umap(seed = 142, config=umap.config)
-#df_features_num %>% t() %>% scale() %>% t() %>% umap::umap(seed = 142, config=umap.config)
+make_umap(df_features, K = 3, seed = 142, scale = F)
+make_umap(df_features, K = 5, seed = 142, scale = F)
+make_umap(df_features, K = 10, seed = 142, scale = F)
+make_umap(df_features, K = 15, seed = 142, scale = F)
+make_umap(df_features, K = 20, seed = 142, scale = F)
 
-# mark outliers on umap coordinates (in 1/99% percentiles or outside the interval defined below for X1/X2)
-df_umap = idr_features_map$layout %>% magrittr::set_colnames(c('X1','X2')) %>%
-  bind_cols(idr_features_map$data %>% as_tibble() %>% dplyr::rename_with(.fn=xxS, s=".", sx='scaled')) %>%
-  bind_cols(df_features_num) %>%
-  bind_cols(df_info) %>%
-  mutate(outliers_x1 = !between(percent_rank(X1),0.001,0.999),
-         outliers_x2 = !between(percent_rank(X2),0.001,0.999),
-         outliers = !between(X1,-8,8) | !between(X2,-6,6))
-summary(df_umap[,c('X1','X2')])
-#library(ggtrace)
-library(ggalt)
-library(ggiraph)
-library(ggforce)
-umap_data = df_umap %>% 
-            filter( !outliers )  %>%
-            mutate(idr_lab=paste0(PROTEIN," ",START,"-",END))
-
-summary(umap_data[,c('X1','X2')])
-# Plot the umap
-UMAP = ggplot(data=umap_data ,aes(x = X1,y = X2)) +
-  # all idrs
-  geom_point(size=1.5,shape=16,color='gray',alpha=1) +
-  # circle PS idr
-  #geom_point(data=subset(umap_data,PS_overlap ), size=3, shape=21, color='black',stroke=0.5) +
-
-  # highlight atar idr
-  geom_point(data=subset(umap_data,from_atar), aes(color=PROTEIN), shape=16, size=4,alpha=0.9) +
-  # geom_text_repel(data=atar_idr,aes(label=idr_lab,color=PROTEIN),
-  #                 size=4,fontface='bold', force=5,  max.overlaps=15,force_pull = -1,
-  #                 seed=291222) +
-
-  # highlight idr in atar's protein (not overlapping)
-  #geom_point(data=atar_neighbor, aes(color=PROTEIN), fill='white',shape=21, stroke=1, size=4, alpha=0.7) +
-  ggrepel::geom_text_repel(data=subset(umap_data,from_atar),aes(label=idr_lab,color=PROTEIN),
-                 size=3,fontface='italic', force=5, max.overlaps=15, force_pull =0,
-                seed=291222) +
-
-  # graphical parameters
-  labs(x = "UMAP1", y = "UMAP2", subtitle="")+
-  see::scale_color_metro(palette = 'rainbow', discrete = T) +
-  theme(legend.position="bottom") + #theme_blackboard()+
-  ggeasy::easy_text_size(c("axis.title","axis.text.x", "axis.text.y"), size = 20)+
-  ggeasy::easy_remove_legend() +
-  ggeasy::easy_remove_x_axis('text') + ggeasy::easy_remove_y_axis('text') +
-  theme(aspect.ratio = 1)
-
-# Make interactive points
-plot(UMAP)
-
-# save umap in PNG/PDF
-ggsave(UMAP,filename = here::here('plots',sprintf('umap-idr-human-k%s.png',K)), height=12,width=12,bg='white')
-ggsave(UMAP, filename = here::here('plots',sprintf('umap-idr-human-k%s.pdf',K)), height=12,width=12,bg='white')
-
-#subset(umap_data,atar_proteins) %>% arrange(IDR_id) %>%
-#  dplyr::relocate(PROTEIN,acc,IDR_id,S,E,S_atar,E_atar,atar_proteins,atar_overlap,PS_overlap) %>% View()
 
