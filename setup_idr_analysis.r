@@ -467,7 +467,6 @@ make_features_correlation= function(df_data){
     dplyr::select(-START,-END)
   
   
-  
   cor_features = ggcorrplot::ggcorrplot(cor(df_num,use = 'pairwise'),
                                         outline.color = 'transparent',
                                         lab = T, lab_size = 0.7, lab_col='gray70',digits = 1,
@@ -485,7 +484,7 @@ make_umap = function(df_data, K=10, seed=142, scale=F){
   umap.config = umap.defaults
   umap.config$n_neighbors = K
   umap.config$min_dist = 0.5
-  umap.config$n_epochs = 300
+  umap.config$n_epochs = 500
   
   tag_neighbor = sprintf("-K%s",K)
   
@@ -495,34 +494,25 @@ make_umap = function(df_data, K=10, seed=142, scale=F){
   
   df_info = df_data %>% dplyr::select( -colnames(df_num) )
   # Compute umap based on scaled features
-  cat(sprintf("Compute umap with K=%s neighbors using ",K))
-  
-  if(scale){
-    cat(": scaled features...\n")
-    tag_scale = "-scaled"
-    features_map <- df_num %>% scale()
-  }else{
-    cat(": raw features (unscaled)...\n")
-    tag_scale = "-raw"
-    features_map <- df_num
-  }
-  
-  umap_data = umap::umap(d = as.matrix(features_map), seed = seed, config=umap.config)
+  cat(sprintf("Compute umap with K=%s neighbors...\n",K))
+  umap_data = umap::umap(d = as.matrix(df_num), seed = seed, config=umap.config)
   
   # Mark outliers on umap coordinates (in 1/99% percentiles or outside the interval defined below for X1/X2)
-  df_umap = umap_data$layout %>% magrittr::set_colnames(c('X1','X2')) %>%
-    bind_cols(umap_data$data %>% as_tibble() %>% rename_with(.fn = xxS, sx=tag_scale,s='')) %>%
+  df_umap_ = umap_data$layout %>% 
+    magrittr::set_colnames(c('X1','X2')) %>%
     bind_cols(df_num) %>%
     bind_cols(df_info) %>%
     mutate(outliers_x1 = !between(percent_rank(X1),0.01,0.99),
            outliers_x2 = !between(percent_rank(X2),0.01,0.99)) %>%
-    mutate(pt_lab=paste0(PROTEIN," ",START,"-",END)) |>
-    filter(between(X1,-10,10), between(X2,-10,10)) 
+    mutate(pt_lab=paste0(PROTEIN," ",START,"-",END))
   
-  x1.q = quantile(df_umap$X1,seq(0,1,len=101))
-  x2.q = quantile(df_umap$X2,seq(0,1,len=101))
-  print(summary(df_umap[,c('X1','X2')]))
   
+  x1.q = quantile(df_umap_$X1,seq(0,1,len=101))
+  x2.q = quantile(df_umap_$X2,seq(0,1,len=101))
+  print(summary(df_umap_[,c('X1','X2')]))
+  
+  df_umap = df_umap_ %>% 
+             filter(between(X1,-10,10), between(X2,-10,10)) 
   n_idr= n_distinct(df_info$IDR_id)
   n_idr_umap= n_distinct(df_umap$IDR_id)
   
@@ -530,6 +520,7 @@ make_umap = function(df_data, K=10, seed=142, scale=F){
   n_prot_umap= n_distinct(df_umap$AC)
   umap_criteria_text = sprintf("seed %s\n%s Neighbors\nscaled %s",seed,K,scale)
   sample_size_text = sprintf("IDR=%s (%s)\nPROT=%s (%s) ",n_idr_umap,n_idr,n_prot_umap,n_prot)
+  umap_coordinates_text = sprintf("X [%.1f,%.1f]\nY [%.1f,%.1f]",x1.q[1],last(x1.q),x2.q[1],last(x2.q))
   
   umap_atar = subset(df_umap,from_atar)
   # Plot the umap
@@ -538,7 +529,7 @@ make_umap = function(df_data, K=10, seed=142, scale=F){
     geom_point(size=1.5,shape=16,color='gray',alpha=1) +
     geom_text(data=NULL,label=sample_size_text, x=Inf, y=Inf, hjust='right',vjust='top',check_overlap = T, size=2) +
     geom_text(data=NULL,label=umap_criteria_text, x=-Inf, y=Inf, hjust='left',vjust='top',check_overlap = T, size=2) +
-    
+    geom_text(data=NULL,label=umap_coordinates_text, x=-Inf, y=-Inf, hjust='left',vjust='bottom',check_overlap = T, size=2) +
     
     # highlight atar idr
     geom_point(data=umap_atar, aes(color=PROTEIN), shape=16, size=3,alpha=0.9) +

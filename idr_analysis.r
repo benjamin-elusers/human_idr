@@ -143,6 +143,9 @@ p_all = make_features_correlation(df_all_features)
 ggsave(p_all,path=here::here("plots"),
        filename ='correlation-human-idr-all-features.png',
        height=12,width=12,bg='white')
+ggsave(p_all,path=here::here("plots"),
+       filename ='correlation-human-idr-all-features.pdf',
+       height=12,width=12,bg='white')
 
 ##### FEATURES SELECTION ######
 
@@ -164,6 +167,15 @@ df_features = bind_rows(HS_IDR,ATAR_IDR) %>%
           from_atar = replace_na(from_atar,FALSE)) %>%
           dplyr::select(-all_of(c('IDR_len',"IDR_count"))) %>%
           distinct() 
+
+df_num = df_features %>%
+         dplyr::select(where(~ is.numeric(.x))) %>%
+         dplyr::select(-START,-END)
+
+df_info = df_features %>% dplyr::select( -colnames(df_num) )
+
+df_scaled = bind_cols(df_info,as_tibble(scale(df_num))) %>% 
+                        dplyr::rename_with(.cols=colnames(df_num),.fn = xxS, sx='scaled',s='.')
 summary(df_features)
 # Check correlogram of selected features
 
@@ -171,11 +183,14 @@ p_used = make_features_correlation(df_features)
 ggsave(p_used,path=here::here("plots"),
        filename ='correlation-human-idr-selected-features.png',
        height=12,width=12,bg='white')
+ggsave(p_used,path=here::here("plots"),
+       filename ='correlation-human-idr-selected-features.pdf',
+       height=12,width=12,bg='white')
 
 # IDR UMAP #####################################################################
 
 k_neighbors = c(10,20,30,40,50,100)
-UMAP_SCALED = lapply(k_neighbors, function(x){ make_umap(df_features, K = x, seed = 142, scale = T)} ) |>
+UMAP_SCALED = lapply(k_neighbors, function(x){ make_umap(df_scaled, K = x, seed = 142, scale = T)} ) |>
               patchwork::wrap_plots(nrow = 2)
 
 # save umap in PNG/PDF
@@ -186,8 +201,6 @@ ggsave(UMAP_SCALED, path=here::here("plots"),
 ggsave(UMAP_SCALED, path=here::here("plots"),
        filename = paste0(plot_name,'.pdf'), scale=1.3,
        device = 'pdf', height=12, width=12, bg='white')
-
-
 
 UMAP_UNSCALED = lapply(k_neighbors, function(x){ make_umap(df_features, K = x, seed = 142, scale = F)} ) |>
   patchwork::wrap_plots(nrow = 2)
