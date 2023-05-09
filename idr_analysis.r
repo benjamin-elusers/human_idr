@@ -52,13 +52,14 @@ hs_idr_ps = left_join(hs_idr,hs_features,by=c("IDR_id")) |>
 # Rename and reorganize the columns
 HS_IDR = inner_join(hs_uni,hs_idr_ps,by=c('AC'='acc')) %>%
   filter(feature_len>35) %>%
+  mutate(PS_n = replace_na(PS_n,0), has_PS = PS_n > 0 ) %>%
   dplyr::select(-DB,-id_cdna,-OS,-OX,-length,-PE,-SV) %>%
   dplyr::rename(IDR_len=feature_len,IDR_seq=feature_seq,
                 IDR_frac=content_fraction,IDR_count=content_count) %>%
   relocate(ncbi_taxid,AC,ID,GN,ensp,NAME,
            uniprot_len,IDR_frac,IDR_count,
            IDR_id,IDR_len,START,END,source,feature,IDR_seq,
-           positive,negative,netcharge,
+           colnames(hs_charge),
            starts_with('pep_'),starts_with("fr_"),starts_with("fc_"), 
            aggrescan:wimleywhite,
            starts_with("mean_")) %>%
@@ -106,10 +107,11 @@ ATAR_IDR = left_join(atar_idr,atar_features,by="IDR_id") |>
   left_join(hs_diso[,c('acc','content_fraction','content_count','length')], by=c('UNIPROT'='acc')) |>
   mutate(from_atar=TRUE) |>
   distinct() |>
-  dplyr::rename(AC=UNIPROT, IDR_frac = content_fraction, IDR_len = content_count) |>
+  dplyr::rename(AC=UNIPROT, IDR_frac = content_fraction, IDR_count = content_count,
+                IDR_len = atar_len) |>
   relocate(AC,PROTEIN, LEN,
-           IDR_id,START,END, atar_len, atar_sequence, 
-           positive,negative,netcharge,
+           IDR_id,START,END, IDR_len, atar_sequence, 
+           colnames(hs_charge),
            starts_with('pep_'),starts_with("fr_"),starts_with("fc_"), aggrescan:wimleywhite,
            starts_with("mean_"))
 
@@ -117,39 +119,84 @@ ATAR_IDR = left_join(atar_idr,atar_features,by="IDR_id") |>
 #save.image(file = here::here('data', 'IDR-features-data.rdata'))
 
 
-# IDR FEATURES TO USE
+#### IDR FEATURES ####
+
+##### FEATURES COMPARISON #####
+
+# Check correlogram of numeric features to remove redundancy
+# (high absoluter correlation == redundant features)
+
+col_mobidb = c('IDR_len','IDR_count','IDR_frac','uniprot_len')
+numeric_features = c( colnames(hs_aacount), colnames(hs_aafreq),
+                      colnames(hs_charge), colnames(hs_peptides),
+                      colnames(hs_scores), colnames(hs_foldchange),
+                      col_mobidb)
+
+df_all_features = bind_rows(HS_IDR,ATAR_IDR) %>% 
+  dplyr::select(PROTEIN,AC,IDR_id,START,END, all_of(numeric_features), has_PS, from_atar) %>%
+  mutate(across(all_of(c('IDR_len',"IDR_count",'uniprot_len')), .fns=~log10(.x), .names="{col}.log10"), 
+         from_atar = replace_na(from_atar,FALSE)) %>%
+  dplyr::select(-all_of(c('IDR_len',"IDR_count",'uniprot_len'))) %>%
+  distinct() 
+
+p_all = make_features_correlation(df_all_features)
+ggsave(p_all,path=here::here("plots"),
+       filename ='correlation-human-idr-all-features.png',
+       height=12,width=12,bg='white')
+
+##### FEATURES SELECTION ######
+
 # AA Frequencies + by chemical group
 # AA Foldchanges
 # AA scores (stickiness, roseman aggrescan)
-# Peptide stats (average MW, Netcharge, PI, IDR_frac)
+# Peptide stats (netcharge, PI, IDR_frac)
+
 
 features_to_use = c(paste0("fr_",c(get.AAA(),"X")),
                     colnames(hs_foldchange), 
+                    c("netcharge_residue","charge_asymetry","peptide_PI"),
                     c("mean_stickiness","mean_roseman","mean_aggrescan"),
-                    c("peptide_mw_avg","peptide_netcharge","peptide_PI"),
-                    "IDR_len","IDR_frac")
+                    "IDR_len","IDR_frac","IDR_count")
 
 df_features = bind_rows(HS_IDR,ATAR_IDR) %>% 
-          dplyr::select(PROTEIN,AC,IDR_id,START,END,features_to_use,from_atar) %>%
-          mutate(IDR_len.log10 = log10(IDR_len), from_atar = replace_na(from_atar,FALSE)) %>%
-          dplyr::select(-IDR_len) %>%
+          dplyr::select(PROTEIN,AC,IDR_id,START,END, all_of(features_to_use) ,from_atar) %>%
+          mutate(across(all_of(c('IDR_len',"IDR_count")), .fns=~log10(.x), .names="{col}.log10"), 
+          from_atar = replace_na(from_atar,FALSE)) %>%
+          dplyr::select(-all_of(c('IDR_len',"IDR_count"))) %>%
           distinct() 
+summary(df_features)
+# Check correlogram of selected features
+
+p_used = make_features_correlation(df_features)
+ggsave(p_used,path=here::here("plots"),
+       filename ='correlation-human-idr-selected-features.png',
+       height=12,width=12,bg='white')
 
 # IDR UMAP #####################################################################
-# Check correlogram of numeric features to remove redundancy
-# (high absoluter correlation == redundant features)
-make_features_correlation(df_features)
 
-make_umap(df_features, K = 3, seed = 142, scale = T)
-make_umap(df_features, K = 5, seed = 142, scale = T)
-make_umap(df_features, K = 10, seed = 142, scale = T)
-make_umap(df_features, K = 15, seed = 142, scale = T)
-make_umap(df_features, K = 20, seed = 142, scale = T)
+k_neighbors = c(10,20,30,40,50,100)
+UMAP_SCALED = lapply(k_neighbors, function(x){ make_umap(df_features, K = x, seed = 142, scale = T)} ) |>
+              patchwork::wrap_plots(nrow = 2)
 
-make_umap(df_features, K = 3, seed = 142, scale = F)
-make_umap(df_features, K = 5, seed = 142, scale = F)
-make_umap(df_features, K = 10, seed = 142, scale = F)
-make_umap(df_features, K = 15, seed = 142, scale = F)
-make_umap(df_features, K = 20, seed = 142, scale = F)
+# save umap in PNG/PDF
+plot_name = 'umap-idr-human-scaled'
+ggsave(UMAP_SCALED, path=here::here("plots"),
+       filename = paste0(plot_name,'.png'),scale=1.3,
+       device = 'png', height=12, width=12, bg='white')
+ggsave(UMAP_SCALED, path=here::here("plots"),
+       filename = paste0(plot_name,'.pdf'), scale=1.3,
+       device = 'pdf', height=12, width=12, bg='white')
 
+
+
+UMAP_UNSCALED = lapply(k_neighbors, function(x){ make_umap(df_features, K = x, seed = 142, scale = F)} ) |>
+  patchwork::wrap_plots(nrow = 2)
+
+plot_name = 'umap-idr-human-unscaled'
+ggsave(UMAP_UNSCALED, path=here::here("plots"),
+       filename = paste0(plot_name,'.png'),scale=1.3,
+       device = 'png', height=12, width=12, bg='white')
+ggsave(UMAP_UNSCALED, path=here::here("plots"),
+       filename = paste0(plot_name,'.pdf'), scale=1.3,
+       device = 'pdf', height=12, width=12, bg='white')
 

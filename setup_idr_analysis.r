@@ -350,9 +350,10 @@ get_aa_count =function(.data,col_sequence="feature_seq"){
   return(df_count)
 }
 
-get_aa_freq = function(aa_count,col_aa=c(get.AAA(),"X")){
+get_aa_freq = function(aa_count,col_aa=c(get.AAA(),"X"),to100=T){
   aas = aa_count |> dplyr::select(all_of(col_aa))
-  df_freq = 100* aa_count / rowSums(aas)
+  df_freq = df_freq = aa_count / rowSums(aas)  
+  if(to100){ df_freq = 100 * df_freq  }
   colnames(df_freq) = paste0("fr_",colnames(df_freq))
   return(df_freq)
 }
@@ -417,9 +418,23 @@ get_aa_topfc= function(aa_fc,col_aa=paste0("fc_",c(get.AAA(),"X")),topn=4){
 get_aa_charge = function(aa_count,col_pos=c("LYS","ARG","HIS"), col_neg= c("ASP","GLU") ){
   .info$log("Count of charged residues...")
   tic("Count of charged residues...")
-  df_charged = tibble( positive=  aa_count[,col_pos] |> rowSums(),
-            negative= aa_count[,col_neg] |> rowSums(),
-            netcharge=(positive-negative) )
+  col_aa = c(get.AAA(),"X")
+  POSITIVE =  aa_count[, col_pos] 
+  NEGATIVE =  aa_count[, col_neg] 
+  
+    df_charged = tibble( sum_aa = aa_count[, col_aa] |> rowSums(),
+                         positive= POSITIVE |> rowSums(),
+                         negative= NEGATIVE |> rowSums()) |>
+            rowwise() |>
+            mutate(
+              fr_positive = positive/sum_aa,
+              fr_negative = negative/sum_aa,
+              netcharge = positive - negative,
+              charged = positive + negative,
+              fr_charged = fr_positive+fr_negative,
+              netcharge_residue =  abs(fr_positive-fr_negative),
+              charge_asymetry = charge.asym(positive,negative)) |>
+    dplyr::select(-sum_aa)
   toc()
   return( df_charged )
 }
@@ -445,22 +460,22 @@ get_aa_foldchange = function(aa_count,ref_aa_freq,col_aa=c(get.AAA(),"X")){
   return(df_foldchange)
 }
 
-make_features_correlation= function(df_data, path_plot = here::here('plots')){
+make_features_correlation= function(df_data){
   
   df_num = df_data %>%
     dplyr::select(where(~ is.numeric(.x))) %>%
     dplyr::select(-START,-END)
   
-  cor_features = ggcorrplot::ggcorrplot(cor(df_num),
-                                        outline.color = 'transparent', 
-                                        tl.cex = 8, tl.srt = 70)
-  ggsave(cor_features,path=path_plot,
-         filename ='correlation-human-idr-features.png',
-         height=12,width=12,bg='white')
   
+  
+  cor_features = ggcorrplot::ggcorrplot(cor(df_num,use = 'pairwise'),
+                                        outline.color = 'transparent',
+                                        lab = T, lab_size = 0.7, lab_col='gray70',digits = 1,
+                                        tl.cex = 8, tl.srt = 70)
+  return(cor_features)
 }
 
-make_umap = function(df_data, K=10, seed=142, scale=F, path_plot = here::here('plots')){
+make_umap = function(df_data, K=10, seed=142, scale=F){
   
   library(umap)
   library(ggalt)
@@ -469,6 +484,8 @@ make_umap = function(df_data, K=10, seed=142, scale=F, path_plot = here::here('p
   set.seed(seed)
   umap.config = umap.defaults
   umap.config$n_neighbors = K
+  umap.config$min_dist = 0.5
+  umap.config$n_epochs = 300
   
   tag_neighbor = sprintf("-K%s",K)
   
@@ -483,16 +500,18 @@ make_umap = function(df_data, K=10, seed=142, scale=F, path_plot = here::here('p
   if(scale){
     cat(": scaled features...\n")
     tag_scale = "-scaled"
-    features_map <- df_num %>% scale() %>% umap::umap(seed = seed, config=umap.config) 
+    features_map <- df_num %>% scale()
   }else{
     cat(": raw features (unscaled)...\n")
     tag_scale = "-raw"
-    features_map <- df_num %>% umap::umap(seed = seed, config=umap.config)
+    features_map <- df_num
   }
   
+  umap_data = umap::umap(d = as.matrix(features_map), seed = seed, config=umap.config)
+  
   # Mark outliers on umap coordinates (in 1/99% percentiles or outside the interval defined below for X1/X2)
-  df_umap = features_map$layout %>% magrittr::set_colnames(c('X1','X2')) %>%
-    bind_cols(features_map$data %>% as_tibble() %>% rename_with(.fn = xxS, sx=tag_scale,s='')) %>%
+  df_umap = umap_data$layout %>% magrittr::set_colnames(c('X1','X2')) %>%
+    bind_cols(umap_data$data %>% as_tibble() %>% rename_with(.fn = xxS, sx=tag_scale,s='')) %>%
     bind_cols(df_num) %>%
     bind_cols(df_info) %>%
     mutate(outliers_x1 = !between(percent_rank(X1),0.01,0.99),
@@ -509,16 +528,20 @@ make_umap = function(df_data, K=10, seed=142, scale=F, path_plot = here::here('p
   
   n_prot= n_distinct(df_info$AC)
   n_prot_umap= n_distinct(df_umap$AC)
-  sample_size_text = sprintf("IDR=%s (%s) | PROT=%s (%s) ",n_idr_umap,n_idr,n_prot_umap,n_prot)
+  umap_criteria_text = sprintf("seed %s\n%s Neighbors\nscaled %s",seed,K,scale)
+  sample_size_text = sprintf("IDR=%s (%s)\nPROT=%s (%s) ",n_idr_umap,n_idr,n_prot_umap,n_prot)
   
   umap_atar = subset(df_umap,from_atar)
   # Plot the umap
   UMAP = ggplot(data=df_umap ,aes(x = X1,y = X2)) +
     # all idrs
     geom_point(size=1.5,shape=16,color='gray',alpha=1) +
-    geom_text(data=NULL,label=sample_size_text, x=Inf, y=Inf, hjust='right',vjust='top',check_overlap = T) +
+    geom_text(data=NULL,label=sample_size_text, x=Inf, y=Inf, hjust='right',vjust='top',check_overlap = T, size=2) +
+    geom_text(data=NULL,label=umap_criteria_text, x=-Inf, y=Inf, hjust='left',vjust='top',check_overlap = T, size=2) +
+    
+    
     # highlight atar idr
-    geom_point(data=umap_atar, aes(color=PROTEIN), shape=16, size=4,alpha=0.9) +
+    geom_point(data=umap_atar, aes(color=PROTEIN), shape=16, size=3,alpha=0.9) +
     # annotate atar idr 
     ggrepel::geom_text_repel(data=umap_atar,aes(label=pt_lab,color=PROTEIN), size=3, fontface='italic',
                              max.overlaps=15, force=5, force_pull=0, seed=291222) +
@@ -526,7 +549,7 @@ make_umap = function(df_data, K=10, seed=142, scale=F, path_plot = here::here('p
     labs(x = "UMAP1", y = "UMAP2", subtitle="")+
     see::scale_color_metro(palette = 'rainbow', discrete = T) +
     theme(legend.position="bottom") +
-    ggeasy::easy_text_size(c("axis.title","axis.text.x", "axis.text.y"), size = 20)+
+    ggeasy::easy_text_size(c("axis.title","axis.text.x", "axis.text.y"), size = 8)+
     ggeasy::easy_remove_legend() +
     ggeasy::easy_remove_x_axis('ticks') + ggeasy::easy_remove_y_axis('ticks') +
     theme(aspect.ratio = 1)
@@ -534,14 +557,6 @@ make_umap = function(df_data, K=10, seed=142, scale=F, path_plot = here::here('p
   # Make interactive points
   plot(UMAP)
   
-  # save umap in PNG/PDF
-  plot_name = sprintf('umap-idr-human%s%s',tag_neighbor,tag_scale)
-  ggsave(UMAP, path = path_plot,
-         filename = paste0(plot_name,'.png'),
-         device = 'png', height=12, width=12, bg='white')
-  ggsave(UMAP, path = path_plot, 
-         filename = paste0(plot_name,'.pdf'), 
-         device = 'pdf', height=12, width=12, bg='white')
   return(UMAP)
 }
 
