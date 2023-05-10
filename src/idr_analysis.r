@@ -1,6 +1,6 @@
 # LOAD DATASETS ################################################################
 #setwd(dirname(rstudioapi::getSourceEditorContext()$path))
-source(here::here("setup_idr_analysis.r"),echo = F,chdir = T)
+source(here::here("src","setup_idr_analysis.r"),echo = F,chdir = T)
 library(Biostrings)
 library(hablar)
 
