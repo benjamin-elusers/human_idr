@@ -1,3 +1,11 @@
+############## OLD SCRIPT ###############
+#########################################
+# THIS IS AN EARLIER VERSION OF THE ANALYSIS IS FOR COMPARISON PURPOSE #
+# THE PURPOSE IS TO BE ABLE TO COMPARE THIS OLDER VERSION WITH THE REFURBISHED CODE (idr_analysis.r)
+# BECAUSE THIS SCRIPT MIXES PRECOMPUTED DATA, FUNCTIONS AND ANALYSIS, I'VE DECIDED TO REFACTOR IT.  
+# FOR BETTER READABILITY, THIS SCRIPT HAS BEEN SEPARATED IN TWO PARTS: SETUP + ANALYISIS
+
+
 ##### SETUP #####
 # requires to load my Yeastomics function from the github url below
 url_yeastomics="https://raw.githubusercontent.com/benjamin-elusers/yeastomics/main/src/"
