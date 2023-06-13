@@ -57,9 +57,9 @@ calculate_aascore = function(aa,verbose=F,scores=get_aa_scales(AA=3)){
     .info$log("Calculate sum of amino acid scores from residues count...")
     tic("Calculate sum of amino acid scores from residues count...")
   }
-  aas = intersect(rownames(scores),colnames(aa))
+  aas = intersect(colnames(aa),rownames(scores))
   sum_scores = map(scores[aas,],
-              ~magrittr::multiply_by(aa,.x) |>  rowSums()) |> bind_rows()
+              ~magrittr::multiply_by(t(aa),.x) |>  colSums()) %>% bind_rows()
   
   toc()
   df_scores = bind_cols(sum_aa=rowSums(aa[,aas]),sum_scores) |>
