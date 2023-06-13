@@ -118,7 +118,7 @@ ATAR_IDR = left_join(atar_idr,atar_features,by="IDR_id") |>
 #write_tsv(ATAR_IDR, file = here::here('data','ATAR-IDR-FEATURES.tsv'))
 #save.image(file = here::here('data', 'IDR-features-data.rdata'))
 
-
+#load(here::here('data', 'IDR-features-data.rdata'))
 #### IDR FEATURES ####
 
 ##### FEATURES COMPARISON #####
@@ -149,11 +149,11 @@ ggsave(p_all,path=here::here("plots"),
 
 ##### FEATURES SELECTION ######
 
+
 # AA Frequencies + by chemical group
 # AA Foldchanges
 # AA scores (stickiness, roseman aggrescan)
 # Peptide stats (netcharge, PI, IDR_frac)
-
 
 features_to_use = c(paste0("fr_",c(get.AAA(),"X")),
                     colnames(hs_foldchange), 
@@ -212,4 +212,35 @@ ggsave(UMAP_UNSCALED, path=here::here("plots"),
 ggsave(UMAP_UNSCALED, path=here::here("plots"),
        filename = paste0(plot_name,'.pdf'), scale=1.3,
        device = 'pdf', height=12, width=12, bg='white')
+
+
+# CORRELATION WITH CSAT ########################################################
+CSAT = tribble( ~PROTEIN, ~csat_conc,
+                "Ddx4",752,
+                "DYRK3", 2275,
+                "FUS", 780,
+                "hnRNPA1", 271,
+                "RBM-14", 148,
+                "TAF-15", 306,
+                "TDP-43", 442,
+                "UBQ2", 81,
+                "HSPB8", 423,
+                "Erα", 2242) %>% 
+  mutate(csat_conc_log10 = log10(csat_conc))
+
+col_mobidb = c('IDR_len','IDR_count','IDR_frac')
+numeric_features = c( colnames(hs_aacount), colnames(hs_aafreq),
+                      colnames(hs_charge), colnames(hs_peptides),
+                      colnames(hs_scores), colnames(hs_foldchange),
+                      col_mobidb)
+
+csat_features = left_join(CSAT,ATAR_IDR)
+
+csat_features %>% 
+  corrr::correlate() %>% 
+  corrr::focus(csat_conc_log10) %>% arrange(csat_conc_log10) %>% 
+  filter( abs(csat_conc_log10) > 0.3 ) %>%
+  ggplot(aes(y=reorder(term,-csat_conc_log10), x=csat_conc_log10, label=term)) + 
+    geom_col(orientation='y') + 
+    geom_text(x=-0.5,col='blue',size=3) 
 
