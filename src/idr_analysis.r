@@ -278,9 +278,9 @@ ggsave(plot_csat_cor, path=here::here("plots"),
 
 
 features_plot = 
-pivot_longer(df_feature_csat, cols = -csat_conc) %>% 
-  arrange(csat_conc) %>% 
-  ggplot(aes(x=value,y=csat_conc)) + 
+pivot_longer(df_feature_csat, cols = -csat_conc_log10) %>% 
+  arrange(csat_conc_log10) %>% 
+  ggplot(aes(x=value,y=csat_conc_log10)) + 
   geom_point() + 
   geom_line(aes(group=name),linewidth=0.1) + 
   geom_smooth(method='lm') +
