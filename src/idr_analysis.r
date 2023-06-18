@@ -190,7 +190,7 @@ ggsave(p_used,path=here::here("plots"),
 # IDR UMAP #####################################################################
 
 k_neighbors = c(10,20,30,40,50,100)
-UMAP_SCALED = lapply(k_neighbors, function(x){ make_umap(df_scaled, K = x, seed = 142, scale = T)} ) |>
+UMAP_SCALED = lapply(k_neighbors, function(x){ make_umap(df_scaled, K = x, seed = 142, is_scaled = T)} ) |>
               patchwork::wrap_plots(nrow = 2)
 
 # save umap in PNG/PDF
@@ -201,6 +201,8 @@ ggsave(UMAP_SCALED, path=here::here("plots"),
 ggsave(UMAP_SCALED, path=here::here("plots"),
        filename = paste0(plot_name,'.pdf'), scale=1.3,
        device = 'pdf', height=12, width=12, bg='white')
+
+make_umap(df_data = df_features, K = 10, seed = 142, scale = F)
 
 UMAP_UNSCALED = lapply(k_neighbors, function(x){ make_umap(df_features, K = x, seed = 142, scale = F)} ) |>
   patchwork::wrap_plots(nrow = 2)

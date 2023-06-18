@@ -469,12 +469,12 @@ make_features_correlation= function(df_data){
   
   cor_features = ggcorrplot::ggcorrplot(cor(df_num,use = 'pairwise'),
                                         outline.color = 'transparent',
-                                        lab = T, lab_size = 0.7, lab_col='gray70',digits = 1,
+                                        lab = T, lab_size = 1, lab_col='gray70',digits = 1,
                                         tl.cex = 8, tl.srt = 70)
   return(cor_features)
 }
 
-make_umap = function(df_data, K=10, seed=142, scale=F){
+make_umap = function(df_data, K=10, seed=142, is_scaled=F){
   
   library(umap)
   library(ggalt)
@@ -483,6 +483,7 @@ make_umap = function(df_data, K=10, seed=142, scale=F){
   set.seed(seed)
   umap.config = umap.defaults
   umap.config$n_neighbors = K
+  umap.config$spread = 1
   umap.config$min_dist = 0.5
   umap.config$n_epochs = 500
   
@@ -497,31 +498,34 @@ make_umap = function(df_data, K=10, seed=142, scale=F){
   cat(sprintf("Compute umap with K=%s neighbors...\n",K))
   umap_data = umap::umap(d = as.matrix(df_num), seed = seed, config=umap.config)
   
-  # Mark outliers on umap coordinates (in 1/99% percentiles or outside the interval defined below for X1/X2)
+  # Mark outliers on umap coordinates (sort distance and find elbow point)
+  avgdist = umap_data$layout %>% dist %>% as.matrix() %>% colMeans()
+  df_avgdist = tibble(x=rank(avgdist), y=avgdist)  %>%  mutate(idx = seq(avgdist)) %>% arrange(avgdist)
+  elbow = pathviewr::find_curve_elbow(data_frame = df_avgdist[,1:2], export_type = 'all') 
+  n_outliers = sum(avgdist > elbow['y'])
+  cat(sprintf("%3d outliers average distance > %.2f\n",n_outliers,elbow['y']))
+  
   df_umap_ = umap_data$layout %>% 
     magrittr::set_colnames(c('X1','X2')) %>%
     bind_cols(df_num) %>%
     bind_cols(df_info) %>%
-    mutate(outliers_x1 = !between(percent_rank(X1),0.01,0.99),
-           outliers_x2 = !between(percent_rank(X2),0.01,0.99)) %>%
-    mutate(pt_lab=paste0(PROTEIN," ",START,"-",END))
-  
+    mutate(PROTEIN = ifelse(is.na(PROTEIN),AC,PROTEIN),
+           pt_lab=paste0(PROTEIN," ",START,"-",END),
+           outliers = avgdist > elbow['y'])
   
   x1.q = quantile(df_umap_$X1,seq(0,1,len=101))
   x2.q = quantile(df_umap_$X2,seq(0,1,len=101))
   print(summary(df_umap_[,c('X1','X2')]))
   
-  df_umap = df_umap_ %>% 
-             filter(between(X1,-10,10), between(X2,-10,10)) 
+  df_umap = df_umap_ %>% filter(!outliers)
   n_idr= n_distinct(df_info$IDR_id)
   n_idr_umap= n_distinct(df_umap$IDR_id)
   
   n_prot= n_distinct(df_info$AC)
   n_prot_umap= n_distinct(df_umap$AC)
-  umap_criteria_text = sprintf("seed %s\n%s Neighbors\nscaled %s",seed,K,scale)
-  sample_size_text = sprintf("IDR=%s (%s)\nPROT=%s (%s) ",n_idr_umap,n_idr,n_prot_umap,n_prot)
+  umap_criteria_text = sprintf("seed %s\n%s Neighbors\nscaled %s",seed,K,is_scaled)
+  sample_size_text = sprintf("IDR=%s (%s)\nPROT=%s (%s)\noutliers=%s (D>%.2f)",n_idr_umap,n_idr,n_prot_umap,n_prot,n_outliers,elbow['y'])
   umap_coordinates_text = sprintf("X [%.1f,%.1f]\nY [%.1f,%.1f]",x1.q[1],last(x1.q),x2.q[1],last(x2.q))
-  
   umap_atar = subset(df_umap,from_atar)
   # Plot the umap
   UMAP = ggplot(data=df_umap ,aes(x = X1,y = X2)) +
