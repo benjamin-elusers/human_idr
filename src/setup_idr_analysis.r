@@ -210,6 +210,29 @@ pkg <- c('here','tidyverse','dplyr','furrr','progressr','pbmcapply','Biostrings'
 xfun::pkg_load2(pkg)
 NCPUS <- parallel::detectCores() - 2
 
+## graphical theme -------------------------------------------------------------
+AXIS_TITLE_SIZE=14
+AXIS_TEXT_SIZE=10
+TEXT_SIZE=4
+
+th_txt_size = hrbrthemes::theme_ipsum(
+  axis_title_just = 'm', axis = 'xy', axis_col = 'black',
+  grid = F, base_family = 'Helvetica',
+  axis_text_size = AXIS_TEXT_SIZE,
+  axis_title_size = AXIS_TITLE_SIZE)
+
+default_look = th_txt_size +
+  ggpubr::grids(axis = 'xy') +
+  theme(aspect.ratio = 1,
+        plot.background = element_rect(fill=NA,linewidth = NA,color=NA),
+        panel.grid.major = element_line(linewidth=0.5,linetype='solid'),
+        panel.grid.minor = element_line(linewidth=0.5,linetype='dashed'),
+        plot.margin = margin(0,3,0,3,unit = 'pt')
+  ) +
+  ggeasy::easy_remove_legend()
+
+theme_set(default_look)
+
 # Loading precomputed data -----------------------------------------------------
 ## amino acids -----------------------------------------------------------------
 AA1=get.AA1()
@@ -554,4 +577,6 @@ make_umap = function(df_data, K=10, seed=142, is_scaled=F){
   
   return(UMAP)
 }
+
+
 

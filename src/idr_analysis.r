@@ -176,7 +176,6 @@ df_info = df_features %>% dplyr::select( -colnames(df_num) )
 
 df_scaled = bind_cols(df_info,as_tibble(scale(df_num))) %>% 
                         dplyr::rename_with(.cols=colnames(df_num),.fn = xxS, sx='scaled',s='.')
-summary(df_features)
 # Check correlogram of selected features
 
 p_used = make_features_correlation(df_features)
@@ -202,9 +201,7 @@ ggsave(UMAP_SCALED, path=here::here("plots"),
        filename = paste0(plot_name,'.pdf'), scale=1.3,
        device = 'pdf', height=12, width=12, bg='white')
 
-make_umap(df_data = df_features, K = 10, seed = 142, scale = F)
-
-UMAP_UNSCALED = lapply(k_neighbors, function(x){ make_umap(df_features, K = x, seed = 142, scale = F)} ) |>
+UMAP_UNSCALED = lapply(k_neighbors, function(x){ make_umap(df_features, K = x, seed = 142, is_scale = F)} ) |>
   patchwork::wrap_plots(nrow = 2)
 
 plot_name = 'umap-idr-human-unscaled'
