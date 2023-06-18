@@ -348,11 +348,11 @@ get_peptstats = function(.data=.,col_sequence="feature_seq",cl){
   df_peptide = group_by(.data,IDR_id) |>
     partition(cl) |>
     summarise(
-      peptide_len = Peptides::lengthpep(col_sequence),
-      peptide_mw  = Peptides::mw(col_sequence),
+      peptide_len = Peptides::lengthpep(!!sym(col_sequence)),
+      peptide_mw  = Peptides::mw(!!sym(col_sequence)),
       peptide_mw_avg = peptide_mw / peptide_len,
-      peptide_netcharge = Peptides::charge(col_sequence),
-      peptide_PI = Peptides::pI(col_sequence)
+      peptide_netcharge = Peptides::charge(!!sym(col_sequence)),
+      peptide_PI = Peptides::pI(!!sym(col_sequence))
     ) |>
     ungroup() |>
     collect()
@@ -540,7 +540,7 @@ make_umap = function(df_data, K=10, seed=142, is_scaled=F){
   x2.q = quantile(df_umap_$X2,seq(0,1,len=101))
   print(summary(df_umap_[,c('X1','X2')]))
   
-  df_umap = df_umap_ %>% filter(!outliers)
+  df_umap = df_umap_ %>% filter(!outliers | from_atar)
   n_idr= n_distinct(df_info$IDR_id)
   n_idr_umap= n_distinct(df_umap$IDR_id)
   
