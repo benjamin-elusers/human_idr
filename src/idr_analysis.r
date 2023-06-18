@@ -252,7 +252,7 @@ features_spearman$name = colnames(df_feature_csat)[-1]
 
 plot_csat_pearson = features_pearson %>% 
   filter( abs(r) > 0.2 ) %>%
-  ggplot(aes(y=reorder(name,-r), x=r, label=name)) + 
+  ggplot(aes(y=reorder(name,-r), x=r, label=reorder(name,-r))) + 
     geom_col(orientation='y', width=0.7) + 
     ggfittext::geom_bar_text() + 
     ggeasy::easy_remove_axes('y') +
@@ -260,7 +260,7 @@ plot_csat_pearson = features_pearson %>%
 
 plot_csat_spearman = features_spearman %>% 
   filter( abs(r) > 0.2 ) %>%
-  ggplot(aes(y=reorder(name,-r), x=r, label=name)) + 
+  ggplot(aes(y=reorder(name,-r), x=r, label=reorder(name,-r))) + 
   geom_col(orientation='y', width=0.7) + 
   ggfittext::geom_bar_text() + 
   ggeasy::easy_remove_axes('y') +
