@@ -341,18 +341,18 @@ add_idr_sequence = function(.data,cl){
   return(df_diso)
 }
 
-get_peptstats = function(.data=.,cl){
+get_peptstats = function(.data=.,col_sequence="feature_seq",cl){
   .info$log("Add pepstats in disordered regions...")
   tic("Add pepstats in disordered regions...")
 
   df_peptide = group_by(.data,IDR_id) |>
     partition(cl) |>
     summarise(
-      peptide_len = Peptides::lengthpep(feature_seq),
-      peptide_mw  = Peptides::mw(feature_seq),
+      peptide_len = Peptides::lengthpep(col_sequence),
+      peptide_mw  = Peptides::mw(col_sequence),
       peptide_mw_avg = peptide_mw / peptide_len,
-      peptide_netcharge = Peptides::charge(feature_seq),
-      peptide_PI = Peptides::pI(feature_seq)
+      peptide_netcharge = Peptides::charge(col_sequence),
+      peptide_PI = Peptides::pI(col_sequence)
     ) |>
     ungroup() |>
     collect()

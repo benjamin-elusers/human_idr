@@ -79,7 +79,7 @@ df_atar = left_join(ATAR_CANDIDATES, df_hs_seq, by=c("UNIPROT"='uniprot_id')) |>
 
 cluster <- new_cluster(10)
 atar_idr = add_idr_sequence(df_atar,cluster) |> arrange(IDR_id)
-atar_peptides = get_peptstats(atar_idr,cl=cluster) |> arrange(IDR_id)
+atar_peptides = get_peptstats(atar_idr,'atar_sequence',cl=cluster) |> arrange(IDR_id)
 rm(cluster)
 
 # Compute amino acid counts in candidate IDRs
@@ -100,6 +100,19 @@ atar_topfc = get_aa_topfc(atar_foldchange,col_aa = paste0("fc_",get.AAA()))
 atar_features = bind_cols(atar_aacount, atar_aafreq, atar_charge, atar_scores,
                         atar_peptides, atar_foldchange, atar_topfreq, atar_topfc)
 
+## QUALITY CONTROL OF COMPUTED FEATURES ########################################
+atar_seq = ATAR_IDR$atar_sequence %>% str_split("")
+sticky = get.stickiness()
+
+sum_stickiness = map_dbl(atar_seq, ~ sum(sticky[.x],na.rm=T) )
+avg_stickiness = map_dbl(atar_seq, ~ mean(sticky[.x],na.rm=T) )
+all.equal(sum_stickiness,ATAR_IDR$stickiness)
+all.equal(avg_stickiness,ATAR_IDR$mean_stickiness)
+
+ATAR_IDR[19,]
+
+
+
 # Atar's candidate IDRs with molecular features + phase-separating regions
 ATAR_IDR = left_join(atar_idr,atar_features,by="IDR_id") |> 
   group_by(UNIPROT,LEN) |>
@@ -116,8 +129,7 @@ ATAR_IDR = left_join(atar_idr,atar_features,by="IDR_id") |>
            starts_with("mean_"))
 
 #write_tsv(ATAR_IDR, file = here::here('data','ATAR-IDR-FEATURES.tsv'))
-#save.image(file = here::here('data', 'IDR-features-data.rdata'))
-
+save.image(file = here::here('data', 'IDR-features-data.rdata'))
 #load(here::here('data', 'IDR-features-data.rdata'))
 #### IDR FEATURES ####
 
@@ -227,19 +239,36 @@ CSAT = tribble( ~PROTEIN, ~csat_conc,
                 "Erα", 2242) %>% 
   mutate(csat_conc_log10 = log10(csat_conc))
 
-col_mobidb = c('IDR_len','IDR_count','IDR_frac')
-numeric_features = c( colnames(hs_aacount), colnames(hs_aafreq),
-                      colnames(hs_charge), colnames(hs_peptides),
-                      colnames(hs_scores), colnames(hs_foldchange),
-                      col_mobidb)
+csat_features = left_join(CSAT,ATAR_IDR) %>% 
+                dplyr::select(colnames(df_info),
+                              csat_conc,csat_conc_log10,
+                              all_of(features_to_use))
 
-csat_features = left_join(CSAT,ATAR_IDR)
+csat_cor = csat_features %>% 
+  dplyr::select(features_to_use,csat_conc_log10, csat_conc) %>% 
+  corrr::correlate(method = 'spearman', use = 'pairwise') %>% 
+  corrr::focus(csat_conc_log10) %>% 
+  arrange(csat_conc_log10) 
 
-csat_features %>% 
-  corrr::correlate() %>% 
-  corrr::focus(csat_conc_log10) %>% arrange(csat_conc_log10) %>% 
-  filter( abs(csat_conc_log10) > 0.3 ) %>%
+plot_csat_cor = csat_cor %>% 
+  filter( abs(csat_conc_log10) > 0.2 ) %>%
   ggplot(aes(y=reorder(term,-csat_conc_log10), x=csat_conc_log10, label=term)) + 
-    geom_col(orientation='y') + 
-    geom_text(x=-0.5,col='blue',size=3) 
+    geom_col(orientation='y', width=0.5) + 
+    ggfittext::geom_bar_text() + 
+    ggeasy::easy_remove_axes('y') +
+    xlab("Spearman correlation (Csat vs. feature)")
+
+ggsave(plot_csat_cor, path=here::here("plots"),
+       filename = 'csat_correlation.pdf', scale=0.8,
+       device = 'pdf', height=12, width=12, bg='white')
+ggsave(plot_csat_cor, path=here::here("plots"),
+       filename = 'csat_correlation.png', scale=0.8,
+       device = 'png', height=12, width=12, bg='white')
+
+
+df_atar = right_join(CSAT,df_features)  %>% filter(from_atar)
+write_tsv(df_atar, file = here::here('data','ATAR-UMAP-DATA.tsv'))
+
+
+
 
