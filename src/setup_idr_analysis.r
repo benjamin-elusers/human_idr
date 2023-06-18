@@ -528,6 +528,15 @@ make_umap = function(df_data, K=10, seed=142, is_scaled=F){
   n_outliers = sum(avgdist > elbow['y'])
   cat(sprintf("%3d outliers average distance > %.2f\n",n_outliers,elbow['y']))
   
+  pathviewr::find_curve_elbow(data_frame = df_avgdist[,1:2],plot_curve = T)
+  elbow_plot = ggplot(df_avgdist) + 
+    geom_point(aes(x=x,y=y)) +
+    geom_vline(xintercept = elbow['x'],col='red') + 
+    geom_text(x=elbow['x']-300,y=elbow['y']+1, col='red',
+              label=sprintf('Elbow distance = %.2f\noutliers=%s',elbow['y'],n_outliers),
+              hjust='inward',check_overlap = T) +
+    ylab('UMAP average distance') + xlab('')
+  
   df_umap_ = umap_data$layout %>% 
     magrittr::set_colnames(c('X1','X2')) %>%
     bind_cols(df_num) %>%
