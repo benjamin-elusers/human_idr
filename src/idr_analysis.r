@@ -79,7 +79,7 @@ df_atar = left_join(ATAR_CANDIDATES, df_hs_seq, by=c("UNIPROT"='uniprot_id')) |>
 
 cluster <- new_cluster(10)
 atar_idr = add_idr_sequence(df_atar,cluster) |> arrange(IDR_id)
-atar_peptides = get_peptstats(atar_idr,col_sequence = 'feature_seq',cl=cluster) |> arrange(IDR_id)
+atar_peptides = get_peptstats(atar_idr,col_sequence = 'atar_sequence',cl=cluster) |> arrange(IDR_id)
 rm(cluster)
 
 # Compute amino acid counts in candidate IDRs
@@ -101,15 +101,15 @@ atar_features = bind_cols(atar_aacount, atar_aafreq, atar_charge, atar_scores,
                         atar_peptides, atar_foldchange, atar_topfreq, atar_topfc)
 
 ## QUALITY CONTROL OF COMPUTED FEATURES ########################################
-atar_seq = ATAR_IDR$atar_sequence %>% str_split("")
+atar_seq = atar_idr$atar_sequence %>% str_split("")
 
 # checking stickiness score
 sticky = get.stickiness()
 sum_stickiness = map_dbl(atar_seq, ~ sum(sticky[.x],na.rm=T) )
 avg_stickiness = map_dbl(atar_seq, ~ mean(sticky[.x],na.rm=T) )
 
-all.equal(sum_stickiness,ATAR_IDR$stickiness)
-all.equal(avg_stickiness,ATAR_IDR$mean_stickiness)
+all.equal(sum_stickiness,atar_features$stickiness)
+all.equal(avg_stickiness,atar_features$mean_stickiness)
 
 # Atar's candidate IDRs with molecular features + phase-separating regions
 ATAR_IDR = left_join(atar_idr,atar_features,by="IDR_id") |> 
@@ -158,8 +158,6 @@ ggsave(p_all,path=here::here("plots"),
        height=12,width=12,bg='white')
 
 ##### FEATURES SELECTION ######
-
-
 # AA Frequencies + by chemical group
 # AA Foldchanges
 # AA scores (stickiness, roseman aggrescan)
@@ -198,7 +196,6 @@ ggsave(p_used,path=here::here("plots"),
 # IDR UMAP #####################################################################
 make_umap(df_scaled, K = 30, seed = 142, is_scaled = T)
 make_umap(df_features, K = 30, seed = 142, is_scaled = F)
-
 
 k_neighbors = c(10,20,30,40,50,100)
 UMAP_SCALED = lapply(k_neighbors, function(x){ make_umap(df_scaled, K = x, seed = 142, is_scaled = T)} ) |>
@@ -268,7 +265,7 @@ ggsave(plot_csat_cor, path=here::here("plots"),
 
 # save UMAP features + CSAT 
 right_join(CSAT,df_features) %>% 
-  filter(from_atar)
+  filter(from_atar) %>%
   write_tsv(file = here::here('data','ATAR-UMAP-DATA.tsv'))
 
 
