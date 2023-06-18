@@ -241,35 +241,33 @@ csat_features = left_join(CSAT,ATAR_IDR) %>%
                               csat_conc,csat_conc_log10,
                               all_of(features_to_use))
 
-csat_scor = csat_features %>% 
-  dplyr::select(features_to_use,csat_conc_log10, csat_conc) %>% 
-  corrr::correlate(method = 'spearman', use = 'pairwise') %>% 
-  corrr::focus(csat_conc_log10) %>% 
-  arrange(csat_conc_log10) 
+df_feature_csat <- csat_features %>% 
+  filter(!is.na(csat_conc)) %>%
+  dplyr::select(-PROTEIN,-AC,-IDR_id,-START,-END,-from_atar, -fc_X, -fr_X)
 
-csat_pcor = csat_features %>% 
-  dplyr::select(features_to_use,csat_conc_log10, csat_conc) %>% 
-  corrr::correlate(method = 'pearson', use = 'pairwise') %>% 
-  corrr::focus(csat_conc_log10) %>% 
-  arrange(csat_conc_log10) 
+features_pearson = map(df_feature_csat[,-1], ~pearson.toplot(df_feature_csat$csat_conc_log10,.x)) %>% bind_rows()
+features_pearson$name = colnames(df_feature_csat)[-1]
+features_spearman = map(df_feature_csat[,-1], ~spearman.toplot(df_feature_csat$csat_conc_log10,.x)) %>% bind_rows()
+features_spearman$name = colnames(df_feature_csat)[-1]
 
-plot_csat_scor = csat_scor %>% 
-  filter( abs(csat_conc_log10) > 0.2 ) %>%
-  ggplot(aes(y=reorder(term,-csat_conc_log10), x=csat_conc_log10, label=term)) + 
+plot_csat_pearson = features_spearman %>% 
+  filter( abs(r) > 0.2 ) %>%
+  ggplot(aes(y=reorder(name,-r), x=r, label=name)) + 
     geom_col(orientation='y', width=0.7) + 
     ggfittext::geom_bar_text() + 
     ggeasy::easy_remove_axes('y') +
     xlab("Spearman correlation (Csat vs. feature)")
 
-plot_csat_pcor = csat_pcor %>% 
-  filter( abs(csat_conc_log10) > 0.2 ) %>%
-  ggplot(aes(y=reorder(term,-csat_conc_log10), x=csat_conc_log10, label=term)) + 
+plot_csat_spearman = features_spearman %>% 
+  filter( abs(r) > 0.2 ) %>%
+  ggplot(aes(y=reorder(name,-r), x=r, label=name)) + 
   geom_col(orientation='y', width=0.7) + 
   ggfittext::geom_bar_text() + 
   ggeasy::easy_remove_axes('y') +
   xlab("Pearson correlation (Csat vs. feature)")
 
-plot_csat_cor = patchwork::wrap_plots(plot_csat_scor,plot_csat_pcor)
+
+plot_csat_cor = patchwork::wrap_plots(plot_csat_spearman,plot_csat_pearson)
 
 ggsave(plot_csat_cor, path=here::here("plots"),
        filename = 'csat_correlation.pdf', scale=1,
@@ -278,13 +276,6 @@ ggsave(plot_csat_cor, path=here::here("plots"),
        filename = 'csat_correlation.png', scale=1,
        device = 'png', height=12, width=12, bg='white')
 
-
-df_feature_csat <- csat_features %>% 
-        filter(!is.na(csat_conc)) %>%
-        dplyr::select(-PROTEIN,-AC,-IDR_id,-START,-END,-from_atar,-csat_conc_log10, -fc_X, -fr_X)
-
-features_pearson = map(df_feature_csat[,-1], ~pearson.toplot(df_feature_csat$csat_conc,.x)) %>% bind_rows()
-features_pearson$name = colnames(df_feature_csat)[-1]
 
 features_plot = 
 pivot_longer(df_feature_csat, cols = -csat_conc) %>% 
