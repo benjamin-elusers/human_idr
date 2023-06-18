@@ -250,13 +250,13 @@ features_pearson$name = colnames(df_feature_csat)[-1]
 features_spearman = map(df_feature_csat[,-1], ~spearman.toplot(df_feature_csat$csat_conc_log10,.x)) %>% bind_rows()
 features_spearman$name = colnames(df_feature_csat)[-1]
 
-plot_csat_pearson = features_spearman %>% 
+plot_csat_pearson = features_pearson %>% 
   filter( abs(r) > 0.2 ) %>%
   ggplot(aes(y=reorder(name,-r), x=r, label=name)) + 
     geom_col(orientation='y', width=0.7) + 
     ggfittext::geom_bar_text() + 
     ggeasy::easy_remove_axes('y') +
-    xlab("Spearman correlation (Csat vs. feature)")
+    xlab("Pearson correlation (Csat vs. feature)")
 
 plot_csat_spearman = features_spearman %>% 
   filter( abs(r) > 0.2 ) %>%
@@ -264,7 +264,7 @@ plot_csat_spearman = features_spearman %>%
   geom_col(orientation='y', width=0.7) + 
   ggfittext::geom_bar_text() + 
   ggeasy::easy_remove_axes('y') +
-  xlab("Pearson correlation (Csat vs. feature)")
+  xlab("Spearman correlation (Csat vs. feature)")
 
 
 plot_csat_cor = patchwork::wrap_plots(plot_csat_spearman,plot_csat_pearson)
