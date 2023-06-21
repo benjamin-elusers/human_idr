@@ -289,18 +289,22 @@ ggsave(plot_csat_cor, path=here::here("plots"),
        filename = 'csat_correlation.png', scale=1.2,
        device = 'png', height=12, width=16, bg='white')
 
-feat_pcor_csat = features_pearson %>% filter(abs(r) > 0.3 ) %>% pull(name)
-features_plot = 
-pivot_longer(df_feature_csat, cols = -csat_conc_log10) %>% 
-  arrange(csat_conc_log10) %>% 
-  ggplot(aes(x=value,y=csat_conc_log10)) + 
+features_cor = bind_rows(features_pearson,features_spearman) %>% mutate(cor_type=subname(method,"'")) %>%
+               pivot_wider(id_cols=name, names_from = cor_type, values_from=c(r,pv,p,signif) ) %>% 
+               mutate(is_signif = (pv_Pearson<=0.05 | pv_Spearman <=0.05),
+                      toshow = sprintf("r=%.2f p=%.2f %s\ns=%.2f p=%.2f %s",r_Pearson,pv_Pearson,signif_Pearson,r_Spearman,pv_Spearman,signif_Spearman))
+features_plot = pivot_longer(df_feature_csat, cols = -csat_conc_log10) %>% 
+                left_join(features_cor) %>%
+  arrange(csat_conc_log10, desc(r_Pearson)) %>% 
+  ggplot(aes(x=value,y=csat_conc_log10,col=is_signif)) + 
   geom_point() + 
   geom_line(aes(group=name),linewidth=0.1) + 
   geom_smooth(method='lm') +
-  geom_text(data=features_pearson, mapping=aes(label=sprintf("s=%.2f\nr=%.2f p=%s",slope,r,p)),
+  geom_text(mapping=aes(label=toshow),
             x=-Inf,y=Inf, hjust='inward',vjust='inward',size=2.5, check_overlap = T) +
+  scale_color_manual(values=c("TRUE"='red',"FALSE"="black")) +
   scale_y_log10() +
-  facet_wrap(~name, scales = 'free_x',nrow = 8,strip.position = 'right') + 
+  facet_wrap(~reorder(name,abs(r_Pearson)), scales = 'free_x',nrow = 8,strip.position = 'right') + 
   theme(strip.text.y = element_text(size = 7),panel.spacing = unit(0.1, "cm"),
         axis.text.x = element_text(size=5),axis.text.y = element_text(size=5))
   
@@ -319,5 +323,26 @@ right_join(CSAT,df_features) %>%
   write_tsv(file = here::here('data','ATAR-UMAP-DATA.tsv'))
 
 
+cor_Vsticky = features_cor %>% filter(name=='voronoi_stickiness')
 
 
+plot_vsticky = csat_features %>%
+  ggplot(aes(y=csat_conc_log10, x=voronoi_stickiness)) + 
+  geom_point() +
+  ggrepel::geom_text_repel(aes(label=PROTEIN)) +
+  geom_smooth(method='lm') + 
+  geom_text(data=cor_Vsticky,aes(label=toshow),x=Inf,y=Inf,hjust='inward',vjust='inward') +
+  xlab('Voronoi Stickiness (sum)') + ylab('IDR saturating concentration (log10)') +
+  theme(axis.title.y = element_text(size=8,family = 'Helvetica'),
+        axis.title.x = element_text(size=8,family = 'Helvetica'), 
+        axis.text.y = element_text(size=8,family = 'Helvetica'),
+        axis.text.x = element_text(size=8,family = 'Helvetica')) 
+
+
+ggsave(plot_vsticky, path=here::here("plots"),
+       filename = 'csat_voronoi_stickiness.png', scale=1,
+       device = 'png', height=5, width=5, bg='white')
+
+ggsave(plot_vsticky, path=here::here("plots"),
+       filename = 'csat_voronoi_stickiness.pdf', scale=1,
+       device = 'pdf', height=5, width=5, bg='white')

@@ -31,7 +31,7 @@ get_aa_scales=function(AA=1){
     pawar=get.pawar_ph7(),
     roseman=get.roseman(),
     stickiness=get.stickiness(),
-    voronoi_sickiness=get.voronoi_stickiness(),
+    voronoi_stickiness=get.voronoi_stickiness(),
     wimleywhite=get.wimleywhite()
   )
   if(AA==3){ rownames(scores)=get.AAA() }
