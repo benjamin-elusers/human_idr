@@ -237,46 +237,59 @@ CSAT = tribble( ~PROTEIN, ~csat_conc,
   mutate(csat_conc_log10 = log10(csat_conc))
 
 csat_features = left_join(CSAT,ATAR_IDR) %>% 
-                dplyr::select(colnames(df_info),
+                dplyr::select(colnames(df_info),where(is.numeric),
                               csat_conc,csat_conc_log10,
-                              all_of(features_to_use))
-
+                              -tot, -X, -fr_X, -fc_X, -peptide_len, -sum_aa, -LEN)
 df_feature_csat <- csat_features %>% 
   filter(!is.na(csat_conc)) %>%
-  dplyr::select(-PROTEIN,-AC,-IDR_id,-START,-END,-from_atar, -fc_X, -fr_X)
+  dplyr::select(-PROTEIN,-AC,-IDR_id,-START,-END,-from_atar)
 
-features_pearson = map(df_feature_csat[,-1], ~pearson.toplot(df_feature_csat$csat_conc_log10,.x)) %>% bind_rows()
-features_pearson$name = colnames(df_feature_csat)[-1]
-features_spearman = map(df_feature_csat[,-1], ~spearman.toplot(df_feature_csat$csat_conc_log10,.x)) %>% bind_rows()
-features_spearman$name = colnames(df_feature_csat)[-1]
+features = df_feature_csat %>% dplyr::select(-starts_with('csat')) %>% colnames
+
+features_pearson = map(features, ~pearson.toplot(df_feature_csat$csat_conc_log10,df_feature_csat[[.x]])) %>% bind_rows()
+features_pearson$name = features
+features_pearson$is_umap = features_pearson$name %in% features_to_use
+features_pearson$signif = symnum(features_pearson$pv, corr = FALSE, cutpoints = c(0,  .001,.01,.05, .1, 1), symbols = c("(***)","(**)","(*)","(.)"," "))
+
+
+features_spearman = map(features, ~spearman.toplot(df_feature_csat$csat_conc_log10,df_feature_csat[[.x]])) %>% bind_rows()
+features_spearman$name = features
+features_spearman$is_umap = features_spearman$name %in% features_to_use
+features_spearman$signif =symnum(features_spearman$pv, corr = FALSE, cutpoints = c(0,  .001,.01,.05, .1, 1), symbols = c("(***)","(**)","(*)","(.)"," "))
+
 
 plot_csat_pearson = features_pearson %>% 
-  filter( abs(r) > 0.2 ) %>%
+  filter( abs(r) > 0.3 ) %>% 
   ggplot(aes(y=reorder(name,-r), x=r, label=reorder(name,-r))) + 
-    geom_col(orientation='y', width=0.7) + 
+    geom_col(orientation='y', width=0.7, linewidth=0.5, aes(col=is_umap)) + 
     ggfittext::geom_bar_text() + 
+    geom_text(mapping = aes(label=sprintf(" %.2f ",r)),col='gray',hjust='outward', size=3) + 
+    geom_text(mapping = aes(label=sprintf(" %.2f %s",pv,signif)),x=-Inf,col='red',hjust='inward', size=3) +   
     ggeasy::easy_remove_axes('y') +
-    xlab("Pearson correlation (Csat vs. feature)")
+    scale_color_manual(values=c("TRUE"='dodgerblue',"FALSE"='transparent')) +
+    xlab("Pearson correlation (Csat vs. feature)") + xlim(-1,1)
 
 plot_csat_spearman = features_spearman %>% 
-  filter( abs(r) > 0.2 ) %>%
+  filter( abs(r) > 0.3 ) %>%
   ggplot(aes(y=reorder(name,-r), x=r, label=reorder(name,-r))) + 
-  geom_col(orientation='y', width=0.7) + 
+  geom_col(orientation='y', width=0.7, linewidth=0.5, aes(col=is_umap)) + 
   ggfittext::geom_bar_text() + 
+  geom_text(mapping = aes(label=sprintf(" %.2f ",r)),col='gray',hjust='outward', size=3) + 
+  geom_text(mapping = aes(label=sprintf(" %.2f %s",pv,signif)),x=-Inf,col='red',hjust='inward', size=3) +   
   ggeasy::easy_remove_axes('y') +
-  xlab("Spearman correlation (Csat vs. feature)")
-
+  scale_color_manual(values=c("TRUE"='dodgerblue',"FALSE"='transparent')) +
+  xlab("Spearman correlation (Csat vs. feature)") + xlim(-1,1)
 
 plot_csat_cor = patchwork::wrap_plots(plot_csat_spearman,plot_csat_pearson)
 
 ggsave(plot_csat_cor, path=here::here("plots"),
-       filename = 'csat_correlation.pdf', scale=1,
-       device = 'pdf', height=12, width=12, bg='white')
+       filename = 'csat_correlation.pdf', scale=1.2,
+       device = 'pdf', height=12, width=16, bg='white')
 ggsave(plot_csat_cor, path=here::here("plots"),
-       filename = 'csat_correlation.png', scale=1,
-       device = 'png', height=12, width=12, bg='white')
+       filename = 'csat_correlation.png', scale=1.2,
+       device = 'png', height=12, width=16, bg='white')
 
-
+feat_pcor_csat = features_pearson %>% filter(abs(r) > 0.3 ) %>% pull(name)
 features_plot = 
 pivot_longer(df_feature_csat, cols = -csat_conc_log10) %>% 
   arrange(csat_conc_log10) %>% 
@@ -287,7 +300,10 @@ pivot_longer(df_feature_csat, cols = -csat_conc_log10) %>%
   geom_text(data=features_pearson, mapping=aes(label=sprintf("s=%.2f\nr=%.2f p=%s",slope,r,p)),
             x=-Inf,y=Inf, hjust='inward',vjust='inward',size=2.5, check_overlap = T) +
   scale_y_log10() +
-  facet_wrap(~name, scales = 'free_x',nrow = 6,strip.position = 'right')
+  facet_wrap(~name, scales = 'free_x',nrow = 8,strip.position = 'right') + 
+  theme(strip.text.y = element_text(size = 7),panel.spacing = unit(0.1, "cm"),
+        axis.text.x = element_text(size=5),axis.text.y = element_text(size=5))
+  
 
 ggsave(features_plot, path=here::here("plots"),
        filename = 'csat_vs_features.pdf', scale=1.2,
