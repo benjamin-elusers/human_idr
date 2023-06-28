@@ -6,7 +6,8 @@ library(hablar)
 
 # BUILD HUMAN IDR DATASET ######################################################
 # Filter consensus disordered regions (at least 50% agreement of predictors)
-hs_mobidb = get_human_mobidb()
+hs_mobidb = get_human_mobidb() 
+hs_mobidb_merged = hs_mobidb |> dplyr::rename(S=START,E=END) |> merge_mobidb(gap_min=3L)
 hs_diso =  dplyr::filter(hs_mobidb, is_uniref & feature == 'disorder' & source %in% 'th_50') |>
            dplyr::rename(IDR_id=feature_id) |> 
            arrange(IDR_id)
@@ -56,17 +57,22 @@ HS_IDR = inner_join(hs_uni,hs_idr_ps,by=c('AC'='acc')) %>%
   dplyr::select(-DB,-id_cdna,-OS,-OX,-length,-PE,-SV) %>%
   dplyr::rename(IDR_len=feature_len,IDR_seq=feature_seq,
                 IDR_frac=content_fraction,IDR_count=content_count) %>%
-  relocate(ncbi_taxid,AC,ID,GN,ensp,NAME,
-           uniprot_len,IDR_frac,IDR_count,
-           IDR_id,IDR_len,START,END,source,feature,IDR_seq,
-           colnames(hs_charge),
-           starts_with('pep_'),starts_with("fr_"),starts_with("fc_"), 
+  relocate(ncbi_taxid,AC,ID,GN,ensp,NAME, is_uniref, uniprot_seq,
+           uniprot_len,IDR_frac,IDR_count, tot,
+           IDR_id,IDR_len,START,END,source,feature,evidence,IDR_seq,
+           colnames(hs_charge),starts_with('peptide_'),
+           sum_aa, all_of(AA3),"X", all_of(names(AA_PROP)),
+           starts_with("fr_"),starts_with("fc_"), 
+           starts_with("frtop_"), starts_with("fctop_"),
            aggrescan:wimleywhite,
-           starts_with("mean_")) %>%
+           starts_with("mean_"),
+           region,has_PS,starts_with("PS_")
+           ) %>%
   ungroup() %>% distinct()
 
 summary(HS_IDR)
-#write_tsv(HS_IDR,file=here::here('data','HUMAN_MOBIDB_FEATURES.tsv'))
+head(HS_IDR)
+write_tsv(HS_IDR,file=here::here('data','HUMAN_MOBIDB_FEATURES.tsv'))
 
 # BUILD ATAR IDR DATASET #######################################################
 # LAST UPDATE OF INPUT DATA *FEB 2023*
