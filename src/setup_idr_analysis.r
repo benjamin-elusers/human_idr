@@ -456,7 +456,7 @@ get_aa_charge = function(aa_count,col_pos=c("LYS","ARG","HIS"), col_neg= c("ASP"
               charged = positive + negative,
               fr_charged = fr_positive+fr_negative,
               netcharge_residue =  abs(fr_positive-fr_negative),
-              charge_asymetry = charge.asym(positive,negative)) |>
+              charge_asymmetry = charge.asym(fr_positive,fr_negative)) |>
     dplyr::select(-sum_aa)
   toc()
   return( df_charged )

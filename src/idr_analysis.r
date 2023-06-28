@@ -74,6 +74,11 @@ summary(HS_IDR)
 head(HS_IDR)
 write_tsv(HS_IDR,file=here::here('data','HUMAN_MOBIDB_FEATURES.tsv'))
 
+colnames(HS_IDR)
+
+protein_info = c(ncbi_taxid, AC, ID, GN, ensp, NAME, is_uniref, uniprot_seq, uniprot_len, IDR_frac, IDR_count)
+idr_info = c(tot, IDR_id, IDR_len, START, END, source, feature, evidence, IDR_seq)
+
 # BUILD ATAR IDR DATASET #######################################################
 # LAST UPDATE OF INPUT DATA *FEB 2023*
 ATAR_CANDIDATES = rio::import(here::here('data',"ATAR_candidates_table.xlsx"))
@@ -171,7 +176,7 @@ ggsave(p_all,path=here::here("plots"),
 
 features_to_use = c(paste0("fr_",c(get.AAA(),"X")),
                     colnames(hs_foldchange), 
-                    c("netcharge_residue","charge_asymetry","peptide_PI"),
+                    c("netcharge_residue","charge_asymmetry","peptide_PI"),
                     c("mean_stickiness","mean_roseman","mean_aggrescan"),
                     "IDR_len","IDR_frac","IDR_count")
 
