@@ -39,6 +39,7 @@ The code is organized to facilitate the reproduction of figures from the manuscr
 ├── plots/                  # auto‑generated figures
 ├── LICENSE                 # GPL‑3.0
 └── README.md               # this file
+```
 
 ## What’s here
 
