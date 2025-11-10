@@ -41,11 +41,10 @@ The code is organized to facilitate the reproduction of figures from the manuscr
 └── README.md               # this file
 
 ```
-
+---
 
 ## What’s here
 
-```
 * **`analysis_umap.r`**: Main script to generate UMAP plots and feature correlations.
 * **`analysis_csat.r`**: Main script to correlate IDR features with experimental C_sat values.
 * **`build_datasets.r`**: Main script to download source data, calculate features, and build the analysis datasets.
@@ -67,7 +66,7 @@ The code is organized to facilitate the reproduction of figures from the manuscr
   * **`(Generated Files)`**: *.tsv and *.rdata files created by the analysis scripts.
 
 * **`plots/`**: (Empty by default) This directory is where all output figures are saved.
-```
+
 > Tip: most reusable code lives under `src/`, while the top‑level scripts (`build_datasets.r`, `analysis_*.r`) run the complete workflows.
 
 ---
