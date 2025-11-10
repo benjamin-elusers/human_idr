@@ -40,7 +40,7 @@ The code is organized to facilitate the reproduction of figures from the manuscr
 ├── LICENSE                 # GPL‑3.0
 └── README.md               # this file
 
-
+```
 
 
 ## What’s here
@@ -67,7 +67,7 @@ The code is organized to facilitate the reproduction of figures from the manuscr
   * **`(Generated Files)`**: *.tsv and *.rdata files created by the analysis scripts.
 
 * **`plots/`**: (Empty by default) This directory is where all output figures are saved.
-
+```
 > Tip: most reusable code lives under `src/`, while the top‑level scripts (`build_datasets.r`, `analysis_*.r`) run the complete workflows.
 
 ---
