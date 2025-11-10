@@ -70,7 +70,11 @@ calculate_aascore = function(aa,verbose=F,scores=get_aa_scales(AA=3)){
 # Get data from source database for LLPS related regions in human
 load_phasep_human = function(){
   .info$log("loading data from phasepDB on human phase-separating regions")
-  url_phasepdb_data = "http://db.phasep.pro/static/db/database/phaseodbv2_1_llps.xlsx"
+  #url_phasepdb_data = "http://db.phasep.pro/static/db/database/phaseodbv2_1_llps.xlsx"
+  # 09.11.2025 DATA ARE STORED IN A ZIP FOLDER. URL CHANGED TO: "https://db.phasep.pro/data/phasepdbv2_1_data.zip" 
+  # THE DATASET WAS DOWNLOADED AND EXTRACTED TO THE DATA FOLDER
+  url_phasepdb_data = "data/phasepdbv2_1_llps.xlsx"
+  
   phasepdb_llps = rio::import(url_phasepdb_data, na = c("","_")) |>
     mutate(region = str_replace_all(region,"–","-") ) |>
     # Keep only human

@@ -72,12 +72,12 @@ HS_IDR = inner_join(hs_uni,hs_idr_ps,by=c('AC'='acc')) %>%
 
 summary(HS_IDR)
 head(HS_IDR)
-write_tsv(HS_IDR,file=here::here('data','HUMAN_MOBIDB_FEATURES.tsv'))
+write_tsv(HS_IDR,file=here::here('data','human_mobidb_features.tsv'))
 
 colnames(HS_IDR)
 
-protein_info = c(ncbi_taxid, AC, ID, GN, ensp, NAME, is_uniref, uniprot_seq, uniprot_len, IDR_frac, IDR_count)
-idr_info = c(tot, IDR_id, IDR_len, START, END, source, feature, evidence, IDR_seq)
+protein_info = c("ncbi_taxid", "AC", "ID", "GN", "ensp", "NAME", "is_uniref", "uniprot_seq", "uniprot_len", "IDR_frac", "IDR_count")
+idr_info = c("tot", "IDR_id", "IDR_len", "START", "END", "source", "feature", "evidence", "IDR_seq")
 
 # BUILD ATAR IDR DATASET #######################################################
 # LAST UPDATE OF INPUT DATA *FEB 2023*
@@ -137,15 +137,14 @@ ATAR_IDR = left_join(atar_idr,atar_features,by="IDR_id") |>
            starts_with('pep_'),starts_with("fr_"),starts_with("fc_"), aggrescan:wimleywhite,
            starts_with("mean_"))
 
-#write_tsv(ATAR_IDR, file = here::here('data','ATAR-IDR-FEATURES.tsv'))
-save.image(file = here::here('data', 'IDR-features-data.rdata'))
+write_tsv(ATAR_IDR, file = here::here('data','atar-idr-features.tsv'))
+save.image(file = here::here('data', 'idr-features-data.rdata'))
 #load(here::here('data', 'IDR-features-data.rdata'))
 #### IDR FEATURES ####
 
 ##### FEATURES COMPARISON #####
-
 # Check correlogram of numeric features to remove redundancy
-# (high absoluter correlation == redundant features)
+# (high absolute correlation == redundant features)
 
 col_mobidb = c('IDR_len','IDR_count','IDR_frac','uniprot_len')
 numeric_features = c( colnames(hs_aacount), colnames(hs_aafreq),
@@ -177,7 +176,7 @@ ggsave(p_all,path=here::here("plots"),
 features_to_use = c(paste0("fr_",c(get.AAA(),"X")),
                     colnames(hs_foldchange), 
                     c("netcharge_residue","charge_asymmetry","peptide_PI"),
-                    c("mean_stickiness","mean_roseman","mean_aggrescan"),
+                    c("stickiness","mean_stickiness","mean_roseman","mean_aggrescan"),
                     "IDR_len","IDR_frac","IDR_count")
 
 df_features = bind_rows(HS_IDR,ATAR_IDR) %>% 
@@ -261,12 +260,14 @@ features_pearson = map(features, ~pearson.toplot(df_feature_csat$csat_conc_log10
 features_pearson$name = features
 features_pearson$is_umap = features_pearson$name %in% features_to_use
 features_pearson$signif = symnum(features_pearson$pv, corr = FALSE, cutpoints = c(0,  .001,.01,.05, .1, 1), symbols = c("(***)","(**)","(*)","(.)"," "))
+features_pearson$p.adj = p.adjust(features_pearson$pv, method="BH")
 
 
 features_spearman = map(features, ~spearman.toplot(df_feature_csat$csat_conc_log10,df_feature_csat[[.x]])) %>% bind_rows()
 features_spearman$name = features
 features_spearman$is_umap = features_spearman$name %in% features_to_use
 features_spearman$signif =symnum(features_spearman$pv, corr = FALSE, cutpoints = c(0,  .001,.01,.05, .1, 1), symbols = c("(***)","(**)","(*)","(.)"," "))
+features_spearman$p.adj =  p.adjust(features_spearman$pv, method="BH")
 
 
 plot_csat_pearson = features_pearson %>% 
@@ -275,7 +276,8 @@ plot_csat_pearson = features_pearson %>%
     geom_col(orientation='y', width=0.7, linewidth=0.5, aes(col=is_umap)) + 
     ggfittext::geom_bar_text() + 
     geom_text(mapping = aes(label=sprintf(" %.2f ",r)),col='gray',hjust='outward', size=3) + 
-    geom_text(mapping = aes(label=sprintf(" %.2f %s",pv,signif)),x=-Inf,col='red',hjust='inward', size=3) +   
+    geom_text(mapping = aes(label=sprintf(" %.2f",p.adj)),x=-1,hjust=0, size=2.5) +   
+    geom_text(mapping = aes(label=sprintf(" %.2f %s",pv,signif)),x=-0.9,col='red',hjust='left', size=3) +   
     ggeasy::easy_remove_axes('y') +
     scale_color_manual(values=c("TRUE"='dodgerblue',"FALSE"='transparent')) +
     xlab("Pearson correlation (Csat vs. feature)") + xlim(-1,1)
@@ -286,7 +288,8 @@ plot_csat_spearman = features_spearman %>%
   geom_col(orientation='y', width=0.7, linewidth=0.5, aes(col=is_umap)) + 
   ggfittext::geom_bar_text() + 
   geom_text(mapping = aes(label=sprintf(" %.2f ",r)),col='gray',hjust='outward', size=3) + 
-  geom_text(mapping = aes(label=sprintf(" %.2f %s",pv,signif)),x=-Inf,col='red',hjust='inward', size=3) +   
+  geom_text(mapping = aes(label=sprintf(" %.2f",p.adj)),x=-1,hjust=0, size=2.5) +   
+  geom_text(mapping = aes(label=sprintf(" %.2f %s",pv,signif)),x=-0.9,col='red',hjust='left', size=3) +   
   ggeasy::easy_remove_axes('y') +
   scale_color_manual(values=c("TRUE"='dodgerblue',"FALSE"='transparent')) +
   xlab("Spearman correlation (Csat vs. feature)") + xlim(-1,1)
