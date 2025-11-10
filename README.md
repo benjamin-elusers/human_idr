@@ -1,4 +1,4 @@
-# human_idr — Analysis code for **IDR feature landscape & UMAP**
+# Analysis of the features landscape from Human **Intrisically Disordered Regions (IDR)**
 
 This repository contains the R code used to perform the bioinformatics analysis for the manuscript **"Mapping interactions between disordered regions reveals promiscuity in biomolecular condensate formation."**
 It is used to compute physicochemical sequence features of human intrinsically disordered regions (IDRs), project them to a low-dimensional space (UMAP), and reproduce the analyses and plots reported in the paper.
