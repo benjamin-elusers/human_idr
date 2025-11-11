@@ -94,7 +94,7 @@ Install on first use; typical install time is 2–5 minutes on a standard deskto
   * `here`
   * `log`
   * `multidplyr`
-  * `furrr
+  * `furrr`
   * `rio`
   * `RJSONIO`
   * `readr`
@@ -194,7 +194,9 @@ The analysis expects a single, processed **IDR feature table** (CSV/TSV) produce
 * UMAP scatter plot(s) written to `plots/` as PDF/PNG.
 * A compact feature table
 * A processed feature table (CSV) written under `data/` (e.g., `data/human_idr_features.csv`).
-* UMAP scatter plot(s) written to `plots/` as PDF/PNG after running `a## How to use on your data
+* UMAP scatter plot(s) written to `plots/` as PDF/PNG after running `analysis_umap.r`
+
+## How to use on your data
 
 1. **Run/obtain the processed feature table** using **Data acquisition & build** above.
 
