@@ -262,8 +262,13 @@ This project is licensed under the **GNU General Public License v3.0** (GPL‑3.
 
 ## How to cite
 
-If you use this code, please cite the manuscript. (Insert DOI once available.) Example:
+If you use this code, please cite the manuscript:
 
-> Authors, *Title of the manuscript*, Journal (Year). DOI
+> Gilat A., Alexandrov A.I., Dubreuil B., Levy E.D.
+> *Mapping interactions between disordered regions reveals promiscuity in biomolecular condensate formation.*
+> **Nature Communications (2026)**
+> DOI: [s41467-026-73800-y](https://doi.org/10.1038/s41467-026-73800-y)
+
+
 
 ---
